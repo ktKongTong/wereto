@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "weread-web",
+  "name": "wereto",
   "main": "apps/web/entry/worker.ts",
   "compatibility_date": "2026-05-17",
   "compatibility_flags": ["nodejs_compat"],
@@ -22,13 +22,13 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "weread-web",
+      "database_name": "wereto",
       "migrations_dir": "apps/web/drizzle/d1"
     }
   ],
   "workflows": [
     {
-      "name": "weread-sync",
+      "name": "wereto",
       "binding": "WEREAD_SYNC_WORKFLOW",
       "class_name": "WeretoSyncWorkflow"
     }

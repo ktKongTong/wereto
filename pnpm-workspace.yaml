@@ -3,6 +3,7 @@ packages:
   - packages/*
 
 catalog:
+  rolldown: 1.0.1
   '@hookform/resolvers': ^5.2.2
   "@loglayer/transport-pino": ^3.0.2
   "@opentelemetry/api": ^1.9.0
@@ -18,8 +19,6 @@ catalog:
   "@vitejs/plugin-react": "6.0.1"
   "@voidzero-dev/vite-plus-core": latest
   "babel-plugin-react-compiler": "1.0.0"
-  better-auth: 1.6.8
-  better-result: "^2.8.2"
   defu: ^6.1.7
   loglayer: ^9.1.0
   microdiff: ^1.5.0
@@ -42,15 +41,12 @@ catalogs:
     drizzle-orm: 1.0.0-rc.1
 
   hono:
-    "@hono/node-server": "2.0.0"
     "@hono/standard-validator": 0.2.2
     "@hono/vite-dev-server": "0.25.3"
     hono: "^4.12.18"
     hono-openapi: 1.3.0
 
   icons:
-    "@phosphor-icons/react": "^2.1.10"
-    "@remixicon/react": "^4.9.0"
     "@tabler/icons-react": "^3.41.1"
 
   react:
@@ -70,9 +66,9 @@ catalogs:
     "tailwindcss": "4.2.4"
 
   worker:
-    "@cloudflare/vite-plugin": "^1.34.0"
-    "@cloudflare/workers-types": "^4.20260426.1"
-    "wrangler": "4.86.0"
+    "@cloudflare/vite-plugin": "^1.37.2"
+    "@cloudflare/workers-types": "^4.20260519.1"
+    "wrangler": "4.93.0"
 
 overrides:
   vite: "catalog:"

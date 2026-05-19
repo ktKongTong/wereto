@@ -16,17 +16,11 @@
   ],
   "scripts": {
     "build": "pnpm run clean && rolldown -c",
-    "check": "tsc -p tsconfig.json --noEmit",
-    "clean": "rm -rf dist",
-    "example:search": "node examples/search.ts",
-    "example:readdata": "node examples/readdata.ts",
-    "example:archive": "node examples/library-archive.ts"
+    "check": "tsgo -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
   },
   "keywords": [
     "weread",
-    "wechat-read",
-    "ky",
-    "fetch",
     "api-client"
   ],
   "license": "MIT",
@@ -34,8 +28,8 @@
     "ky": "^2.0.2"
   },
   "devDependencies": {
-    "@types/node": "^25.8.0",
-    "rolldown": "^1.0.1",
-    "typescript": "^6.0.3"
+    "@types/node": "catalog:",
+    "rolldown": "catalog:",
+    "typescript": "catalog:"
   }
 }
