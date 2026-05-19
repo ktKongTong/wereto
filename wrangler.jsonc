@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wereadto",
+  "main": "./apps/web/entry/worker.ts",
+  "compatibility_date": "2026-05-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./apps/web/build/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": false
+    }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "weread-web",
+      "migrations_dir": "apps/web/drizzle/d1"
+    }
+  ],
+  "workflows": [
+    {
+      "name": "weread-sync",
+      "binding": "WEREAD_SYNC_WORKFLOW",
+      "class_name": "WereadSyncWorkflow"
+    }
+  ]
+}
