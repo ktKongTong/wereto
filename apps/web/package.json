@@ -4,21 +4,13 @@
   "type": "module",
   "scripts": {
     "dev": "RUNTIME=node react-router dev",
-    "dev:node": "RUNTIME=node react-router dev",
-    "dev:worker": "RUNTIME=workerd react-router dev",
-    "dev:bun": "RUNTIME=bun react-router dev",
-    "dev:deno": "RUNTIME=deno react-router dev",
-    "build": "RUNTIME=node react-router build",
-    "build:worker": "RUNTIME=workerd react-router build",
-    "build:vercel": "RUNTIME=vercel react-router build",
-    "build:bun": "RUNTIME=bun react-router build",
-    "build:deno": "RUNTIME=deno react-router build",
+    "build": "RUNTIME=workerd react-router build",
     "check": "react-router typegen && tsgo -p tsconfig.json --noEmit",
     "db:generate": "drizzle-kit generate && pnpm run db:sync",
     "db:sync": "node scripts/sync-d1-migrations.ts",
     "db:push": "drizzle-kit push",
-    "migration": "wrangler d1 migrations apply weread-web --remote",
-    "deploy": "wrangler deploy"
+    "migration": "wrangler --config=../../wrangler.jsonc d1 migrations apply DB --remote",
+    "deploy": "pnpm run migration && wrangler deploy --config=./build/server/wrangler.json"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

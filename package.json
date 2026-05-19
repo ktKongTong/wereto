@@ -6,12 +6,16 @@
   "scripts": {
     "dev": "pnpm --filter @apps/web dev",
     "build": "pnpm -r build",
+    "deploy": "pnpm --filter @apps/web run deploy",
     "check": "pnpm -r check",
     "example:search": "pnpm --filter @repo/weread-api example:search",
     "example:readdata": "pnpm --filter @repo/weread-api example:readdata",
     "example:archive": "pnpm --filter @repo/weread-api example:archive"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.37.1",
+    "@cloudflare/workers-types": "^4.20260515.0",
+    "wrangler": "^4.92.0",
     "@types/bun": "catalog:",
     "@types/deno": "catalog:",
     "@types/node": "catalog:",

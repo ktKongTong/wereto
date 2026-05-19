@@ -1,11 +1,11 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "wereadto",
-  "main": "./apps/web/entry/worker.ts",
+  "name": "weread-web",
+  "main": "apps/web/entry/worker.ts",
   "compatibility_date": "2026-05-17",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
-    "directory": "./apps/web/build/client",
+    "directory": "apps/web/build/client",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application"
   },
@@ -30,7 +30,7 @@
     {
       "name": "weread-sync",
       "binding": "WEREAD_SYNC_WORKFLOW",
-      "class_name": "WereadSyncWorkflow"
+      "class_name": "WeretoSyncWorkflow"
     }
   ]
 }

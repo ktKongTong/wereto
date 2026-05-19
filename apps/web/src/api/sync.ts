@@ -66,7 +66,7 @@ export async function startWereadSync(c: Context) {
     }
 
     const instance = await env.WEREAD_SYNC_WORKFLOW.create({
-      id: `weread-sync-${runId}`,
+      id: `weread-sync-x-${runId}`,
       params: { runId },
     });
 

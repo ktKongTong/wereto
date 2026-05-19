@@ -1,9 +1,7 @@
-import { inArray } from "drizzle-orm";
-
 import { highlights, reviews } from "../db/schema.ts";
+import { bulkInsert, deleteWhereIn } from "../db/utils/d1-bulk-writer.ts";
 import { parseSnapshot } from "./snapshots.ts";
 import type { DbLike, SnapshotRow } from "./types.ts";
-import { chunkArray, rowParamLimitedChunks } from "./utils.ts";
 
 export async function commitNotebookContent(
   db: DbLike,
@@ -13,10 +11,8 @@ export async function commitNotebookContent(
   now: number,
 ) {
   const touchedBookIds = findTouchedBookIds([...highlightRows, ...reviewRows], bookIdMap);
-  for (const ids of chunkArray(touchedBookIds, 100)) {
-    await db.delete(highlights).where(inArray(highlights.bookId, ids));
-    await db.delete(reviews).where(inArray(reviews.bookId, ids));
-  }
+  await deleteWhereIn(db, highlights, highlights.bookId, touchedBookIds);
+  await deleteWhereIn(db, reviews, reviews.bookId, touchedBookIds);
 
   const highlightValues = highlightRows.flatMap((row) => {
     const item = parseSnapshot<Record<string, unknown>>(row);
@@ -36,7 +32,7 @@ export async function commitNotebookContent(
     }];
   });
 
-  for (const chunk of rowParamLimitedChunks(highlightValues)) await db.insert(highlights).values(chunk);
+  await bulkInsert(db, highlights, highlightValues);
 
   const reviewValues = reviewRows.flatMap((row) => {
     const item = parseSnapshot<Record<string, unknown>>(row);
@@ -59,7 +55,7 @@ export async function commitNotebookContent(
     }];
   });
 
-  for (const chunk of rowParamLimitedChunks(reviewValues)) await db.insert(reviews).values(chunk);
+  await bulkInsert(db, reviews, reviewValues);
 }
 
 function findTouchedBookIds(rows: SnapshotRow[], bookIdMap: Map<string, number>) {

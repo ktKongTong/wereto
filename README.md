@@ -1,86 +1,27 @@
-# weread-api
+# wereto
 
-一个基于 `fetch` + `ky` 的微信读书 API wrapper，默认封装了 Agent Gateway 的调用方式。
+基于微信读书 [weread-skills](https://weread.qq.com/r/weread-skills) 创建的阅读数据页.
 
-## 安装
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ktKongTong/wereto)
 
-```bash
-pnpm install
-```
+![img_1.png](example-1.png)
+![img_2.png](example-2.png)
 
-## 环境变量
 
-```bash
-export WEREAD_API_KEY=wrk-xxxxxxxx
-```
 
-## 用法
+## 一键部署 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ktKongTong/wereto)
 
-```ts
-import { createWereadClient } from "weread-api";
+部署完成后，可进入页面进行配置，默认密码为 `wereto`(首次登录后，请务必更新）.
 
-const client = createWereadClient();
+在 [weread-skills](https://weread.qq.com/r/weread-skills) 获取 Weread APIKey
 
-const search = await client.searchBooks({
-  keyword: "三体",
-  scope: 10,
-  count: 5,
-});
+![img.png](img.png)
 
-const bookId = search.results?.[0]?.books?.[0]?.bookInfo.bookId;
+在配置页面进行保存，随后在同步页面进行首次全量同步，同步完成后即可见到数据
 
-if (bookId) {
-  const book = await client.getBookInfo({ bookId });
-  console.log(book.title, book.author);
-}
-```
+数据会每日定时增量同步
 
-## 设计
+### credit
 
-- `WereadClient` 基于 `ky.create(...)`
-- JS 和 `.d.ts` 产物都由 `rolldown` 生成
-- 默认 `baseUrl` 为 `https://i.weread.qq.com/`
-- 默认 `prefix` 为 `api/agent/gateway`
-- 默认自动注入 `skill_version`
-- 默认读取 `WEREAD_API_KEY`
-- 对网关 `errcode` 和 `upgrade_info` 做统一错误处理
-
-## 已封装方法
-
-- `request(payload)`：通用网关调用
-- `searchBooks(...)`
-- `getBookInfo(...)`
-- `getChapterInfo(...)`
-- `getProgress(...)`
-- `getShelf()`
-- `getReadData(...)`
-
-## 示例
-
-```bash
-pnpm run example:search -- 三体 5
-pnpm run example:readdata
-pnpm run example:archive
-```
-
-阅读数据示例会抓取全部历史年份，生成带年度切换的 GitHub 风格本地 dashboard：
-
-```text
-examples/output/readdata-history-dashboard.html
-```
-
-个人档案页会导出书架、笔记本、划线与个人评论摘要：
-
-```text
-examples/output/library-archive.html
-```
-
-## 开发
-
-```bash
-pnpm run check
-pnpm run build
-pnpm run example:search
-pnpm run example:readdata
-pnpm run example:archive
-```
+inspired by: https://github.com/gabehf/Koito

@@ -1,5 +1,3 @@
-import { sql } from "drizzle-orm";
-
 import {
   albums,
   bookInfo,
@@ -8,9 +6,9 @@ import {
   notebookBooks,
   shelfItems,
 } from "../db/schema.ts";
+import { bulkInsert, bulkUpsert } from "../db/utils/d1-bulk-writer.ts";
 import { parseSnapshot } from "./snapshots.ts";
 import type { AlbumSnapshot, BookSnapshot, DbLike, SnapshotRow } from "./types.ts";
-import { rowParamLimitedChunks } from "./utils.ts";
 
 export async function commitBooks(db: DbLike, rows: SnapshotRow[], now: number) {
   const values = rows.map((row) => {
@@ -31,12 +29,7 @@ export async function commitBooks(db: DbLike, rows: SnapshotRow[], now: number) 
       updatedAt: now,
     };
   });
-  for (const chunk of rowParamLimitedChunks(values)) {
-    await db.insert(books).values(chunk).onConflictDoUpdate({
-      target: books.wereadBookId,
-      set: excluded(["title", "author", "cover", "intro", "category", "publisher", "isbn", "word_count", "rating", "rating_count", "raw_json", "updated_at"]),
-    });
-  }
+  await bulkUpsert(db, books, books.wereadBookId, values, ["title", "author", "cover", "intro", "category", "publisher", "isbn", "word_count", "rating", "rating_count", "raw_json", "updated_at"]);
   return loadBookIdMap(db);
 }
 
@@ -55,12 +48,7 @@ export async function commitAlbums(db: DbLike, rows: SnapshotRow[], now: number)
       updatedAt: now,
     };
   });
-  for (const chunk of rowParamLimitedChunks(values)) {
-    await db.insert(albums).values(chunk).onConflictDoUpdate({
-      target: albums.wereadAlbumId,
-      set: excluded(["name", "author_name", "cover", "track_count", "finish_status", "intro", "raw_json", "updated_at"]),
-    });
-  }
+  await bulkUpsert(db, albums, albums.wereadAlbumId, values, ["name", "author_name", "cover", "track_count", "finish_status", "intro", "raw_json", "updated_at"]);
   return loadAlbumIdMap(db);
 }
 
@@ -96,7 +84,7 @@ export async function commitShelfItems(db: DbLike, rows: SnapshotRow[], bookIdMa
       updatedAt: now,
     };
   });
-  for (const chunk of rowParamLimitedChunks(values)) await db.insert(shelfItems).values(chunk);
+  await bulkInsert(db, shelfItems, values);
 }
 
 export async function commitNotebookBooks(db: DbLike, rows: SnapshotRow[], bookIdMap: Map<string, number>, now: number) {
@@ -117,22 +105,12 @@ export async function commitNotebookBooks(db: DbLike, rows: SnapshotRow[], bookI
       updatedAt: now,
     }];
   });
-  for (const chunk of rowParamLimitedChunks(values)) {
-    await db.insert(notebookBooks).values(chunk).onConflictDoUpdate({
-      target: notebookBooks.bookId,
-      set: excluded(["review_count", "note_count", "bookmark_count", "total_count", "reading_progress", "marked_status", "sort", "raw_json", "updated_at"]),
-    });
-  }
+  await bulkUpsert(db, notebookBooks, notebookBooks.bookId, values, ["review_count", "note_count", "bookmark_count", "total_count", "reading_progress", "marked_status", "sort", "raw_json", "updated_at"]);
 }
 
 export async function commitBookInfo(db: DbLike, rows: SnapshotRow[], bookIdMap: Map<string, number>, now: number) {
   const values = rows.flatMap((row) => mapBookLinkedRow(row, bookIdMap, now));
-  for (const chunk of rowParamLimitedChunks(values)) {
-    await db.insert(bookInfo).values(chunk).onConflictDoUpdate({
-      target: bookInfo.bookId,
-      set: excluded(["title", "author", "translator", "cover", "intro", "category", "publisher", "publish_time", "isbn", "word_count", "rating", "rating_count", "rating_detail_json", "raw_json", "updated_at"]),
-    });
-  }
+  await bulkUpsert(db, bookInfo, bookInfo.bookId, values, ["title", "author", "translator", "cover", "intro", "category", "publisher", "publish_time", "isbn", "word_count", "rating", "rating_count", "rating_detail_json", "raw_json", "updated_at"]);
 }
 
 export async function commitBookProgress(db: DbLike, rows: SnapshotRow[], bookIdMap: Map<string, number>, now: number) {
@@ -154,12 +132,7 @@ export async function commitBookProgress(db: DbLike, rows: SnapshotRow[], bookId
       updatedAt: now,
     }];
   });
-  for (const chunk of rowParamLimitedChunks(values)) {
-    await db.insert(bookProgress).values(chunk).onConflictDoUpdate({
-      target: bookProgress.bookId,
-      set: excluded(["chapter_uid", "chapter_offset", "progress", "record_reading_time", "finish_time", "is_start_reading", "source_update_time", "source_timestamp", "raw_json", "updated_at"]),
-    });
-  }
+  await bulkUpsert(db, bookProgress, bookProgress.bookId, values, ["chapter_uid", "chapter_offset", "progress", "record_reading_time", "finish_time", "is_start_reading", "source_update_time", "source_timestamp", "raw_json", "updated_at"]);
 }
 
 function mapBookLinkedRow(row: SnapshotRow, bookIdMap: Map<string, number>, now: number) {
@@ -184,12 +157,4 @@ function mapBookLinkedRow(row: SnapshotRow, bookIdMap: Map<string, number>, now:
     rawJson: typeof item.rawJson === "string" ? item.rawJson : null,
     updatedAt: now,
   }];
-}
-
-function excluded(columns: string[]) {
-  return Object.fromEntries(columns.map((column) => [toCamel(column), sql.raw(`excluded.${column}`)]));
-}
-
-function toCamel(column: string) {
-  return column.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
 }

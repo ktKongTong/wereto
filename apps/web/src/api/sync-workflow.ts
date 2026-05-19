@@ -11,7 +11,7 @@ export type WereadSyncWorkflowEnv = DbEnv & {
   WEREAD_SYNC_WORKFLOW: Workflow<WereadSyncWorkflowParams>;
 };
 
-export class WereadSyncWorkflow extends WorkflowEntrypoint<WereadSyncWorkflowEnv, WereadSyncWorkflowParams> {
+export class WeretoSyncWorkflow extends WorkflowEntrypoint<WereadSyncWorkflowEnv, WereadSyncWorkflowParams> {
   async run(event: WorkflowEvent<WereadSyncWorkflowParams>, step: WorkflowStep) {
     const runId = event.payload.runId;
     const runner = createWorkflowStepRunner(step);

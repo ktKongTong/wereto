@@ -1,8 +1,8 @@
 import { createRRApp } from "../src/app/server";
 import { cleanupTimedOutSyncRuns } from "../src/api/sync-cleanup";
-import { WereadSyncWorkflow, type WereadSyncWorkflowEnv } from "../src/api/sync-workflow";
+import { WeretoSyncWorkflow, type WereadSyncWorkflowEnv } from "../src/api/sync-workflow";
 
-export { WereadSyncWorkflow };
+export { WeretoSyncWorkflow };
 
 const app = createRRApp({
   runtime: "workerd",
@@ -17,4 +17,5 @@ export default {
     const cleaned = await cleanupTimedOutSyncRuns(env);
     console.log(`sync cleanup processed ${cleaned} timed out run(s)`);
   },
+  queue: () => {}
 } satisfies ExportedHandler<WereadSyncWorkflowEnv>;
