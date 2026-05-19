@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import {
   readBooks,
@@ -9,29 +9,22 @@ import {
   readingYears,
   syncCursors,
 } from "../db/schema.ts";
+import { bulkInsert, bulkUpsert, deleteWhereIn } from "../db/utils/d1-bulk-writer.ts";
 import { parseSnapshot } from "./snapshots.ts";
 import type { DbLike, SnapshotRow } from "./types.ts";
-import { chunkArray, rowParamLimitedChunks } from "./utils.ts";
 
 export async function commitReadingPeriods(db: DbLike, periodRows: SnapshotRow[], bookRows: SnapshotRow[], bookIdMap: Map<string, number>, albumIdMap: Map<string, number>, now: number) {
   const periodValues = periodRows.map((row) => mapPeriod(row, now));
   const committedPeriodKeys = new Set(periodValues.map((item) => `${item.periodType}:${item.periodStart}`));
 
-  for (const chunk of rowParamLimitedChunks(periodValues)) {
-    await db.insert(readingPeriods).values(chunk).onConflictDoUpdate({
-      target: [readingPeriods.periodType, readingPeriods.periodStart],
-      set: excluded(["period_end", "base_time", "total_read_time", "read_days", "day_average_read_time", "compare_basis_points", "read_times_json", "read_stat_json", "raw_json", "updated_at"]),
-    });
-  }
+  await bulkUpsert(db, readingPeriods, [readingPeriods.periodType, readingPeriods.periodStart], periodValues, ["period_end", "base_time", "total_read_time", "read_days", "day_average_read_time", "compare_basis_points", "read_times_json", "read_stat_json", "raw_json", "updated_at"]);
 
   const periodIdMap = await loadPeriodIdMap(db, periodValues);
   const committedPeriodIds = [...periodIdMap.values()];
-  for (const ids of chunkArray(committedPeriodIds, 100)) {
-    await db.delete(readingPeriodBooks).where(inArray(readingPeriodBooks.periodId, ids));
-  }
+  await deleteWhereIn(db, readingPeriodBooks, readingPeriodBooks.periodId, committedPeriodIds);
 
   const values = bookRows.flatMap((row) => mapPeriodBook(row, committedPeriodKeys, periodIdMap, bookIdMap, albumIdMap, now));
-  for (const chunk of rowParamLimitedChunks(values)) await db.insert(readingPeriodBooks).values(chunk);
+  await bulkInsert(db, readingPeriodBooks, values);
 }
 
 export async function commitReadingYears(db: DbLike, yearRows: SnapshotRow[], topRows: SnapshotRow[], bookIdMap: Map<string, number>, albumIdMap: Map<string, number>, now: number) {
@@ -49,18 +42,11 @@ export async function commitReadingYears(db: DbLike, yearRows: SnapshotRow[], to
     };
   });
 
-  for (const chunk of rowParamLimitedChunks(yearValues)) {
-    await db.insert(readingYears).values(chunk).onConflictDoUpdate({
-      target: readingYears.year,
-      set: excluded(["total_read_time", "read_days", "day_average_read_time", "compare_basis_points", "raw_json", "updated_at"]),
-    });
-  }
+  await bulkUpsert(db, readingYears, readingYears.year, yearValues, ["total_read_time", "read_days", "day_average_read_time", "compare_basis_points", "raw_json", "updated_at"]);
 
-  for (const yearChunk of chunkArray(years, 100)) {
-    await db.delete(readingTopBooks).where(inArray(readingTopBooks.year, yearChunk));
-  }
+  await deleteWhereIn(db, readingTopBooks, readingTopBooks.year, years);
   const topBookValues = topRows.map((row) => mapTopBook(row, bookIdMap, albumIdMap, now));
-  for (const chunk of rowParamLimitedChunks(topBookValues)) await db.insert(readingTopBooks).values(chunk);
+  await bulkInsert(db, readingTopBooks, topBookValues);
 }
 
 export async function commitReadingDays(db: DbLike, rows: SnapshotRow[], now: number) {
@@ -69,12 +55,7 @@ export async function commitReadingDays(db: DbLike, rows: SnapshotRow[], now: nu
     return { year: Number(item.year), day: String(item.day), readSeconds: Number(item.readSeconds ?? 0), source: String(item.source ?? "unknown"), updatedAt: now };
   });
 
-  for (const chunk of rowParamLimitedChunks(values)) {
-    await db.insert(readingDays).values(chunk).onConflictDoUpdate({
-      target: [readingDays.year, readingDays.day],
-      set: excluded(["read_seconds", "source", "updated_at"]),
-    });
-  }
+  await bulkUpsert(db, readingDays, [readingDays.year, readingDays.day], values, ["read_seconds", "source", "updated_at"]);
 }
 
 export async function rebuildReadBooks(db: DbLike, now: number) {
@@ -104,7 +85,7 @@ export async function rebuildReadBooks(db: DbLike, now: number) {
     source: "weekly_read_longest",
     updatedAt: now,
   }));
-  for (const chunk of rowParamLimitedChunks(values)) await db.insert(readBooks).values(chunk);
+  await bulkInsert(db, readBooks, values);
 }
 
 export async function commitCursors(db: DbLike, rows: SnapshotRow[], now: number) {
@@ -112,12 +93,7 @@ export async function commitCursors(db: DbLike, rows: SnapshotRow[], now: number
     const item = parseSnapshot<{ key: string; value: string }>(row);
     return { key: item.key, value: item.value, updatedAt: now };
   });
-  for (const chunk of rowParamLimitedChunks(values)) {
-    await db.insert(syncCursors).values(chunk).onConflictDoUpdate({
-      target: syncCursors.key,
-      set: excluded(["value", "updated_at"]),
-    });
-  }
+  await bulkUpsert(db, syncCursors, syncCursors.key, values, ["value", "updated_at"]);
 }
 
 function mapPeriod(row: SnapshotRow, now: number) {
@@ -172,12 +148,4 @@ function mapLinkedReadItem(item: Record<string, unknown>, bookIdMap: Map<string,
     authorSnapshot: typeof item.authorSnapshot === "string" ? item.authorSnapshot : null,
     coverSnapshot: typeof item.coverSnapshot === "string" ? item.coverSnapshot : null,
   };
-}
-
-function excluded(columns: string[]) {
-  return Object.fromEntries(columns.map((column) => [toCamel(column), sql.raw(`excluded.${column}`)]));
-}
-
-function toCamel(column: string) {
-  return column.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
 }

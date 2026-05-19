@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { getDb, type AppDb, type DbEnv } from "./db/client.ts";
 import { getConfigValue } from "./db/config.ts";
 import { syncSnapshotBooks } from "./db/schema.ts";
+import { chunkArray } from "./db/utils/d1-bulk-writer.ts";
 import { SyncRunLogger } from "./sync-logger.ts";
 import { bootstrapRun, finalizeRun } from "./sync-weread/lifecycle.ts";
 import { discardSnapshots, stageSnapshot } from "./sync-weread/snapshots.ts";
@@ -12,7 +13,7 @@ import { stageBookDetailAndProgress, stageShelf } from "./sync-weread/stage-book
 import { getChangedNotebooks, stageNotebookContent, stageNotebooks } from "./sync-weread/stage-notebooks.ts";
 import { stageCurrentWeekReadingDays, stageReadingDaysForYear, stageReadingYear } from "./sync-weread/stage-reading-days.ts";
 import { stageReadingPeriod } from "./sync-weread/stage-reading.ts";
-import { chunkArray, estimateReadingPeriodCount, formatShanghaiDate, nowUnix, ONE_DAY_SECONDS, toJson } from "./sync-weread/utils.ts";
+import { estimateReadingPeriodCount, formatShanghaiDate, nowUnix, ONE_DAY_SECONDS, toJson } from "./sync-weread/utils.ts";
 
 export type SyncStepConfig = {
   retries?: {

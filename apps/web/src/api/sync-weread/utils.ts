@@ -1,5 +1,4 @@
 export const ONE_DAY_SECONDS = 86400;
-export const D1_MAX_STATEMENT_PARAMS = 100;
 
 export function nowUnix() {
   return Math.floor(Date.now() / 1000);
@@ -11,23 +10,6 @@ export function toJson(value: unknown) {
 
 export function parseJson<T>(value: string) {
   return JSON.parse(value) as T;
-}
-
-export function chunkArray<T>(items: T[], size: number) {
-  const chunks: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
-}
-
-export function paramLimitedChunks<T>(items: T[], paramsPerRow: number) {
-  return chunkArray(items, Math.max(1, Math.floor(D1_MAX_STATEMENT_PARAMS / paramsPerRow)));
-}
-
-export function rowParamLimitedChunks<T extends Record<string, unknown>>(items: T[]) {
-  const paramsPerRow = items[0] ? Object.keys(items[0]).length : 1;
-  return paramLimitedChunks(items, paramsPerRow);
 }
 
 export function estimateReadingPeriodCount(registTime: number | undefined, now: number) {
