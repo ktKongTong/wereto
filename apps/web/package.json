@@ -10,7 +10,7 @@
     "db:sync": "node scripts/sync-d1-migrations.ts",
     "db:push": "drizzle-kit push",
     "migration": "wrangler d1 migrations apply weread-web --remote",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy --config=./build/server/wrangler.json"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

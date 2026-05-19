@@ -8,7 +8,7 @@ export default defineConfig(() => {
     plugins: [
       cloudflare({
         viteEnvironment: { name: "ssr" },
-        configPath: '../../wrangler.jsonc'
+        configPath: '../../wrangler.jsonc',
       })
       , tailwindcss(), reactRouter()],
     resolve: {
