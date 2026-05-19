@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "pnpm --filter @apps/web dev",
     "build": "pnpm -r build",
-    "deploy": "pnpm --filter @apps/web deploy",
+    "deploy": "pnpm --filter @apps/web run deploy",
     "check": "pnpm -r check",
     "example:search": "pnpm --filter @repo/weread-api example:search",
     "example:readdata": "pnpm --filter @repo/weread-api example:readdata",
