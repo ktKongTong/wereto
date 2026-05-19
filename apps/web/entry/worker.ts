@@ -17,4 +17,5 @@ export default {
     const cleaned = await cleanupTimedOutSyncRuns(env);
     console.log(`sync cleanup processed ${cleaned} timed out run(s)`);
   },
+  queue: () => {}
 } satisfies ExportedHandler<WereadSyncWorkflowEnv>;
