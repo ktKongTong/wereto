@@ -14,31 +14,15 @@ export const createRRApp = ({ api, runtime }: CreateRRAppOptions) => {
   const app = new Hono();
 
   app.route("/api", createApp(api));
-
-  if (runtime === "workerd" || runtime === "vercel") {
-    const requestHandler = createRequestHandler(
-      () => import("virtual:react-router/server-build"),
-      import.meta.env.MODE,
-    );
-
-    switch (runtime) {
-      case "workerd":
-        app.all("*", (c) =>
-          requestHandler(c.req.raw, {
-            cloudflare: { env: c.env, ctx: c.executionCtx as ExecutionContext },
-          }),
-        );
-        break;
-      case "vercel":
-        app.all("*", (c) =>
-          requestHandler(c.req.raw, {
-            runtime: "vercel",
-            env: process.env,
-          }),
-        );
-        break;
-    }
-  }
+  const requestHandler = createRequestHandler(
+    () => import("virtual:react-router/server-build"),
+    import.meta.env.MODE,
+  );
+  app.all("*", (c) =>
+    requestHandler(c.req.raw, {
+      cloudflare: { env: c.env, ctx: c.executionCtx as ExecutionContext },
+    }),
+  );
 
   return app;
 };

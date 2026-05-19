@@ -7,7 +7,7 @@
 ```bash
 pnpm install
 ```
-
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)]()
 ## 环境变量
 
 ```bash
