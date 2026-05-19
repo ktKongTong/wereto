@@ -5,11 +5,11 @@ import { getDbForRequest } from "./db/runtime.ts";
 import { getSyncRunById } from "./db/queries.ts";
 import { syncRuns } from "./db/schema.ts";
 import { SyncRunLogger } from "./sync-logger.ts";
-import type { WereadSyncQueueEnv, WereadSyncQueueMessage } from "./sync-queue.ts";
+import type { WereadSyncWorkflowParams } from "./sync-workflow.ts";
 
-type SyncRequestEnv = Partial<WereadSyncQueueEnv> & {
+type SyncRequestEnv = {
   DB?: D1Database;
-  WEREAD_SYNC_QUEUE?: Queue<WereadSyncQueueMessage>;
+  WEREAD_SYNC_WORKFLOW?: Workflow<WereadSyncWorkflowParams>;
 };
 
 export async function startWereadSync(c: Context) {
@@ -61,24 +61,35 @@ export async function startWereadSync(c: Context) {
   });
 
   try {
-    if (!env.WEREAD_SYNC_QUEUE) {
-      throw new Error("Missing WEREAD_SYNC_QUEUE binding");
+    if (!env.WEREAD_SYNC_WORKFLOW) {
+      throw new Error("Missing WEREAD_SYNC_WORKFLOW binding");
     }
 
-    await env.WEREAD_SYNC_QUEUE.send({ type: "weread_sync", runId });
+    const instance = await env.WEREAD_SYNC_WORKFLOW.create({
+      id: `weread-sync-${runId}`,
+      params: { runId },
+    });
+
+    await db
+      .update(syncRuns)
+      .set({
+        workflowInstanceId: instance.id,
+        updatedAt: now,
+      })
+      .where(eq(syncRuns.id, runId));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await db
       .update(syncRuns)
       .set({
         status: "failed",
-        phase: "queue",
+        phase: "workflow",
         finishedAt: now,
         updatedAt: now,
         errorMessage: message,
       })
       .where(eq(syncRuns.id, runId));
-    await logger.error("queue", message);
+    await logger.error("workflow", message);
     throw error;
   }
 

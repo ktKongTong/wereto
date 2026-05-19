@@ -14,6 +14,7 @@ export const syncRuns = sqliteTable(
     updatedAt: integer("updated_at").notNull().default(0),
     progressCurrent: integer("progress_current").notNull().default(0),
     progressTotal: integer("progress_total").notNull().default(0),
+    workflowInstanceId: text("workflow_instance_id"),
     errorMessage: text("error_message"),
     resultJson: text("result_json"),
     statsJson: text("stats_json"),
@@ -49,22 +50,255 @@ export const syncRunLogs = sqliteTable(
   ],
 );
 
-export const syncSnapshots = sqliteTable(
-  "sync_snapshots",
+const snapshotBase = {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  runId: integer("run_id").notNull(),
+  createdAt: integer("created_at").notNull(),
+};
+
+export const syncSnapshotBooks = sqliteTable(
+  "sync_snapshot_books",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    runId: integer("run_id").notNull(),
-    targetTable: text("target_table").notNull(),
-    entityKey: text("entity_key").notNull(),
-    operation: text("operation").notNull().default("upsert"),
-    payloadJson: text("payload_json").notNull(),
-    createdAt: integer("created_at").notNull(),
+    ...snapshotBase,
+    wereadBookId: text("weread_book_id").notNull(),
+    title: text("title").notNull(),
+    author: text("author"),
+    cover: text("cover"),
+    intro: text("intro"),
+    category: text("category"),
+    publisher: text("publisher"),
+    isbn: text("isbn"),
+    wordCount: integer("word_count"),
+    rating: integer("rating"),
+    ratingCount: integer("rating_count"),
+    rawJson: text("raw_json"),
   },
-  (table) => [
-    uniqueIndex("sync_snapshots_run_target_key_idx").on(table.runId, table.targetTable, table.entityKey),
-    index("sync_snapshots_run_idx").on(table.runId),
-    index("sync_snapshots_target_idx").on(table.targetTable),
-  ],
+  (table) => [uniqueIndex("sync_snapshot_books_run_book_idx").on(table.runId, table.wereadBookId)],
+);
+
+export const syncSnapshotAlbums = sqliteTable(
+  "sync_snapshot_albums",
+  {
+    ...snapshotBase,
+    wereadAlbumId: text("weread_album_id").notNull(),
+    name: text("name").notNull(),
+    authorName: text("author_name"),
+    cover: text("cover"),
+    trackCount: integer("track_count"),
+    finishStatus: text("finish_status"),
+    intro: text("intro"),
+    rawJson: text("raw_json"),
+  },
+  (table) => [uniqueIndex("sync_snapshot_albums_run_album_idx").on(table.runId, table.wereadAlbumId)],
+);
+
+export const syncSnapshotShelfItems = sqliteTable(
+  "sync_snapshot_shelf_items",
+  {
+    ...snapshotBase,
+    entityKey: text("entity_key").notNull(),
+    itemType: text("item_type").notNull(),
+    wereadBookId: text("weread_book_id"),
+    wereadAlbumId: text("weread_album_id"),
+    titleSnapshot: text("title_snapshot").notNull(),
+    authorSnapshot: text("author_snapshot"),
+    coverSnapshot: text("cover_snapshot"),
+    categorySnapshot: text("category_snapshot"),
+    isTop: integer("is_top").notNull().default(0),
+    isSecret: integer("is_secret").notNull().default(0),
+    finishReading: integer("finish_reading").notNull().default(0),
+    readUpdateTime: integer("read_update_time"),
+    sourceUpdateTime: integer("source_update_time"),
+    rawJson: text("raw_json"),
+  },
+  (table) => [uniqueIndex("sync_snapshot_shelf_items_run_key_idx").on(table.runId, table.entityKey)],
+);
+
+export const syncSnapshotNotebookBooks = sqliteTable(
+  "sync_snapshot_notebook_books",
+  {
+    ...snapshotBase,
+    wereadBookId: text("weread_book_id").notNull(),
+    reviewCount: integer("review_count").notNull().default(0),
+    noteCount: integer("note_count").notNull().default(0),
+    bookmarkCount: integer("bookmark_count").notNull().default(0),
+    totalCount: integer("total_count").notNull().default(0),
+    readingProgress: integer("reading_progress"),
+    markedStatus: integer("marked_status"),
+    sort: integer("sort").notNull().default(0),
+    rawJson: text("raw_json"),
+  },
+  (table) => [uniqueIndex("sync_snapshot_notebook_books_run_book_idx").on(table.runId, table.wereadBookId)],
+);
+
+export const syncSnapshotBookInfo = sqliteTable(
+  "sync_snapshot_book_info",
+  {
+    ...snapshotBase,
+    wereadBookId: text("weread_book_id").notNull(),
+    title: text("title").notNull(),
+    author: text("author"),
+    translator: text("translator"),
+    cover: text("cover"),
+    intro: text("intro"),
+    category: text("category"),
+    publisher: text("publisher"),
+    publishTime: text("publish_time"),
+    isbn: text("isbn"),
+    wordCount: integer("word_count"),
+    rating: integer("rating"),
+    ratingCount: integer("rating_count"),
+    ratingDetailJson: text("rating_detail_json"),
+    rawJson: text("raw_json"),
+  },
+  (table) => [uniqueIndex("sync_snapshot_book_info_run_book_idx").on(table.runId, table.wereadBookId)],
+);
+
+export const syncSnapshotBookProgress = sqliteTable(
+  "sync_snapshot_book_progress",
+  {
+    ...snapshotBase,
+    wereadBookId: text("weread_book_id").notNull(),
+    chapterUid: integer("chapter_uid"),
+    chapterOffset: integer("chapter_offset"),
+    progress: integer("progress"),
+    recordReadingTime: integer("record_reading_time"),
+    finishTime: integer("finish_time"),
+    isStartReading: integer("is_start_reading"),
+    sourceUpdateTime: integer("source_update_time"),
+    sourceTimestamp: integer("source_timestamp"),
+    rawJson: text("raw_json"),
+  },
+  (table) => [uniqueIndex("sync_snapshot_book_progress_run_book_idx").on(table.runId, table.wereadBookId)],
+);
+
+export const syncSnapshotHighlights = sqliteTable(
+  "sync_snapshot_highlights",
+  {
+    ...snapshotBase,
+    wereadBookId: text("weread_book_id").notNull(),
+    wereadBookmarkId: text("weread_bookmark_id").notNull(),
+    chapterUid: integer("chapter_uid"),
+    chapterTitle: text("chapter_title"),
+    range: text("range"),
+    markText: text("mark_text").notNull(),
+    colorStyle: integer("color_style"),
+    createTime: integer("create_time").notNull(),
+    rawJson: text("raw_json"),
+  },
+  (table) => [uniqueIndex("sync_snapshot_highlights_run_bookmark_idx").on(table.runId, table.wereadBookmarkId)],
+);
+
+export const syncSnapshotReviews = sqliteTable(
+  "sync_snapshot_reviews",
+  {
+    ...snapshotBase,
+    wereadBookId: text("weread_book_id").notNull(),
+    wereadReviewId: text("weread_review_id").notNull(),
+    chapterUid: integer("chapter_uid"),
+    chapterName: text("chapter_name"),
+    range: text("range"),
+    abstract: text("abstract"),
+    content: text("content").notNull(),
+    star: integer("star"),
+    isFinish: integer("is_finish"),
+    reviewType: text("review_type").notNull().default("unknown"),
+    createTime: integer("create_time").notNull(),
+    rawJson: text("raw_json"),
+  },
+  (table) => [uniqueIndex("sync_snapshot_reviews_run_review_idx").on(table.runId, table.wereadReviewId)],
+);
+
+export const syncSnapshotReadingPeriods = sqliteTable(
+  "sync_snapshot_reading_periods",
+  {
+    ...snapshotBase,
+    periodType: text("period_type").notNull(),
+    periodStart: text("period_start").notNull(),
+    periodEnd: text("period_end"),
+    baseTime: integer("base_time").notNull(),
+    totalReadTime: integer("total_read_time").notNull().default(0),
+    readDays: integer("read_days").notNull().default(0),
+    dayAverageReadTime: integer("day_average_read_time").notNull().default(0),
+    compare: integer("compare_basis_points"),
+    readTimesJson: text("read_times_json"),
+    readStatJson: text("read_stat_json"),
+    rawJson: text("raw_json"),
+  },
+  (table) => [uniqueIndex("sync_snapshot_reading_periods_run_period_idx").on(table.runId, table.periodType, table.periodStart)],
+);
+
+export const syncSnapshotReadingPeriodBooks = sqliteTable(
+  "sync_snapshot_reading_period_books",
+  {
+    ...snapshotBase,
+    periodKey: text("period_key").notNull(),
+    wereadBookId: text("weread_book_id"),
+    wereadAlbumId: text("weread_album_id"),
+    rank: integer("rank").notNull(),
+    readTime: integer("read_time").notNull().default(0),
+    recordReadingTime: integer("record_reading_time").notNull().default(0),
+    tagsJson: text("tags_json"),
+    titleSnapshot: text("title_snapshot").notNull(),
+    authorSnapshot: text("author_snapshot"),
+    coverSnapshot: text("cover_snapshot"),
+    rawJson: text("raw_json"),
+  },
+  (table) => [uniqueIndex("sync_snapshot_reading_period_books_run_period_rank_idx").on(table.runId, table.periodKey, table.rank)],
+);
+
+export const syncSnapshotReadingYears = sqliteTable(
+  "sync_snapshot_reading_years",
+  {
+    ...snapshotBase,
+    year: integer("year").notNull(),
+    totalReadTime: integer("total_read_time").notNull().default(0),
+    readDays: integer("read_days").notNull().default(0),
+    dayAverageReadTime: integer("day_average_read_time").notNull().default(0),
+    compare: integer("compare_basis_points"),
+    rawJson: text("raw_json"),
+  },
+  (table) => [uniqueIndex("sync_snapshot_reading_years_run_year_idx").on(table.runId, table.year)],
+);
+
+export const syncSnapshotReadingTopBooks = sqliteTable(
+  "sync_snapshot_reading_top_books",
+  {
+    ...snapshotBase,
+    year: integer("year").notNull(),
+    wereadBookId: text("weread_book_id"),
+    wereadAlbumId: text("weread_album_id"),
+    rank: integer("rank").notNull(),
+    readTime: integer("read_time").notNull().default(0),
+    recordReadingTime: integer("record_reading_time").notNull().default(0),
+    tagsJson: text("tags_json"),
+    titleSnapshot: text("title_snapshot").notNull(),
+    authorSnapshot: text("author_snapshot"),
+    coverSnapshot: text("cover_snapshot"),
+  },
+  (table) => [uniqueIndex("sync_snapshot_reading_top_books_run_year_rank_idx").on(table.runId, table.year, table.rank)],
+);
+
+export const syncSnapshotReadingDays = sqliteTable(
+  "sync_snapshot_reading_days",
+  {
+    ...snapshotBase,
+    year: integer("year").notNull(),
+    day: text("day").notNull(),
+    readSeconds: integer("read_seconds").notNull().default(0),
+    source: text("source").notNull(),
+  },
+  (table) => [uniqueIndex("sync_snapshot_reading_days_run_day_idx").on(table.runId, table.year, table.day)],
+);
+
+export const syncSnapshotCursors = sqliteTable(
+  "sync_snapshot_cursors",
+  {
+    ...snapshotBase,
+    key: text("key").notNull(),
+    value: text("value").notNull(),
+  },
+  (table) => [uniqueIndex("sync_snapshot_cursors_run_key_idx").on(table.runId, table.key)],
 );
 
 export const appConfig = sqliteTable("app_config", {

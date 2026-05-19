@@ -1,6 +1,8 @@
 import { createRRApp } from "../src/app/server";
 import { cleanupTimedOutSyncRuns } from "../src/api/sync-cleanup";
-import { consumeWereadSyncQueue, type WereadSyncQueueEnv, type WereadSyncQueueMessage } from "../src/api/sync-queue";
+import { WereadSyncWorkflow, type WereadSyncWorkflowEnv } from "../src/api/sync-workflow";
+
+export { WereadSyncWorkflow };
 
 const app = createRRApp({
   runtime: "workerd",
@@ -11,9 +13,8 @@ const app = createRRApp({
 
 export default {
   fetch: app.fetch,
-  queue: consumeWereadSyncQueue,
   async scheduled(_controller, env) {
     const cleaned = await cleanupTimedOutSyncRuns(env);
     console.log(`sync cleanup processed ${cleaned} timed out run(s)`);
   },
-} satisfies ExportedHandler<WereadSyncQueueEnv, WereadSyncQueueMessage>;
+} satisfies ExportedHandler<WereadSyncWorkflowEnv>;

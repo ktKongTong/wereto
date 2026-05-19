@@ -14,9 +14,9 @@ declare module "hono" {
   }
 }
 export const createApp = (_options: ServerOptions) => {
-  const app = new Hono();
+  const app = new Hono<{ Bindings: DbEnv }>();
   app.use('*', async (c, next) => {
-    c.set("db", getDb(c.env.DB));
+    c.set("db", getDb(c.env));
     await next();
   });
 

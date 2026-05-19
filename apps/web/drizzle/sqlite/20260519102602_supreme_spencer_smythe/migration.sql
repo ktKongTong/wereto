@@ -1,0 +1,1 @@
+ALTER TABLE `sync_runs` ADD `workflow_instance_id` text;
