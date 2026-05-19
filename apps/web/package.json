@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "RUNTIME=node react-router dev",
-    "build:worker": "RUNTIME=workerd react-router build",
+    "build": "RUNTIME=workerd react-router build",
     "check": "react-router typegen && tsgo -p tsconfig.json --noEmit",
     "db:generate": "drizzle-kit generate && pnpm run db:sync",
     "db:sync": "node scripts/sync-d1-migrations.ts",
