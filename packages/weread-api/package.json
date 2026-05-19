@@ -1,0 +1,41 @@
+{
+  "name": "@repo/weread-api",
+  "version": "0.1.0",
+  "description": "Typed WeRead API wrapper built on fetch and ky.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "pnpm run clean && rolldown -c",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
+    "example:search": "node examples/search.ts",
+    "example:readdata": "node examples/readdata.ts",
+    "example:archive": "node examples/library-archive.ts"
+  },
+  "keywords": [
+    "weread",
+    "wechat-read",
+    "ky",
+    "fetch",
+    "api-client"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "ky": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.8.0",
+    "rolldown": "^1.0.1",
+    "typescript": "^6.0.3"
+  }
+}

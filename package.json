@@ -1,0 +1,24 @@
+{
+  "name": "weread-monorepo",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "dev": "pnpm --filter @apps/web dev",
+    "build": "pnpm -r build",
+    "check": "pnpm -r check",
+    "example:search": "pnpm --filter @repo/weread-api example:search",
+    "example:readdata": "pnpm --filter @repo/weread-api example:readdata",
+    "example:archive": "pnpm --filter @repo/weread-api example:archive"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "@types/deno": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:react",
+    "@types/react-dom": "catalog:react",
+    "@typescript/native-preview": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

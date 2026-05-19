@@ -1,0 +1,87 @@
+packages:
+  - apps/*
+  - packages/*
+
+catalog:
+  '@hookform/resolvers': ^5.2.2
+  "@loglayer/transport-pino": ^3.0.2
+  "@opentelemetry/api": ^1.9.0
+  "@rolldown/plugin-babel": "0.2.3"
+  "@simplewebauthn/server": ^13.3.0
+  "@tanstack/react-form": ^1.29.1
+  '@tanstack/react-query': ^5.100.10
+  "@tanstack/react-table": ^8.21.3
+  "@types/bun": 1.3.13
+  "@types/deno": 2.5.0
+  "@types/node": ^25
+  "@typescript/native-preview": "npm:@typescript/native-preview@latest"
+  "@vitejs/plugin-react": "6.0.1"
+  "@voidzero-dev/vite-plus-core": latest
+  "babel-plugin-react-compiler": "1.0.0"
+  better-auth: 1.6.8
+  better-result: "^2.8.2"
+  defu: ^6.1.7
+  loglayer: ^9.1.0
+  microdiff: ^1.5.0
+  nitro: latest
+  pino: ^10.3.1
+  radix-ui: ^1.4.3
+  react-hook-form: ^7.76.0
+  react-router-hono-server: 2.26.0
+  sonner: ^2.0.7
+  typescript: npm:@typescript/native-preview@latest
+  uuid: ^14.0.0
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite-plus: latest
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+  zod: "^4.4.3"
+catalogMode: prefer
+catalogs:
+  drizzle:
+    drizzle-kit: 1.0.0-rc.1
+    drizzle-orm: 1.0.0-rc.1
+
+  hono:
+    "@hono/node-server": "2.0.0"
+    "@hono/standard-validator": 0.2.2
+    "@hono/vite-dev-server": "0.25.3"
+    hono: "^4.12.18"
+    hono-openapi: 1.3.0
+
+  icons:
+    "@phosphor-icons/react": "^2.1.10"
+    "@remixicon/react": "^4.9.0"
+    "@tabler/icons-react": "^3.41.1"
+
+  react:
+    "@types/react": "^19.2.14"
+    "@types/react-dom": "^19.2.3"
+    "react": "^19.2.5"
+    "react-dom": "^19.2.5"
+
+  react-router:
+    "@react-router/dev": "7.14.2"
+    "@react-router/node": "7.14.2"
+    "@react-router/serve": "7.14.2"
+    "react-router": "7.14.2"
+
+  tailwindcss:
+    "@tailwindcss/vite": "4.2.4"
+    "tailwindcss": "4.2.4"
+
+  worker:
+    "@cloudflare/vite-plugin": "^1.34.0"
+    "@cloudflare/workers-types": "^4.20260426.1"
+    "wrangler": "4.86.0"
+
+overrides:
+  vite: "catalog:"
+  vitest: "catalog:"
+
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: "*"
+    vitest: "*"
