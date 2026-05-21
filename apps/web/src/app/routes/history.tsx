@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 
-import type { HistoryYearRecord } from "../../api/weread";
+import type { HistoryYearRecord } from "../../api/read-models/history.read-model";
+import { Skeleton } from "../../components/ui/skeleton";
 import { formatDate, formatDuration } from "../../lib/format";
 import { useHistoryQuery, useSessionQuery } from "../../lib/queries";
-import { useShell } from "./layout";
 
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const CURRENT_YEAR = new Date().getFullYear();
+const LOADING_YEARS = Array.from({ length: 9 }, (_, index) => CURRENT_YEAR - index);
 
 export default function HistoryPage() {
   return <HistoryScreen />;
@@ -14,15 +16,9 @@ export default function HistoryPage() {
 function HistoryScreen() {
   const session = useSessionQuery();
   const canView = Boolean(session.data?.authenticated || session.data?.public);
-  const { data, error, isPending } = useHistoryQuery(canView);
   const [activeYear, setActiveYear] = useState<number | null>(null);
-  const { openSettings } = useShell();
 
-  useEffect(() => {
-    if (!session.isPending && !canView) {
-      openSettings("account");
-    }
-  }, [canView, openSettings, session.isPending]);
+  const { data, error, isPending } = useHistoryQuery(canView);
 
   useEffect(() => {
     if (data && activeYear === null) {
@@ -31,23 +27,40 @@ function HistoryScreen() {
   }, [activeYear, data]);
 
   if (error) {
-    return <main className="mx-auto max-w-5xl px-6 py-20 text-red-600">{error instanceof Error ? error.message : "加载失败"}</main>;
-  }
-
-  if (!session.isPending && !canView) {
     return (
-      <section className="max-w-xl space-y-4 pt-10">
-        <h2 className="text-3xl font-semibold text-foreground">Private archive, please sign in first</h2>
-      </section>
+      <HistoryEmptyState
+        title="数据不可用"
+        description="历史数据加载失败"
+        detail={error instanceof Error ? error.message : "未知错误"}
+      />
     );
   }
 
-  if (session.isPending || isPending || !data || activeYear === null) {
-    return <main className="mx-auto max-w-5xl px-6 py-20 text-foreground/60">Loading history...</main>;
+  if (!session.isPending && !canView) {
+    return <HistoryEmptyState title="阅读数据未公开" description="登录后可查看" />;
   }
 
-  const activeRecord = data.records.find((record) => record.year === activeYear) ?? data.records.at(-1)!;
+  if (session.isPending || isPending || !data) {
+    return <HistorySkeleton />;
+  }
+
+  if (data.records.length === 0 || activeYear === null) {
+    return <HistoryEmptyState title="还没有历史数据" description="完成一次同步后，这里会显示年度阅读热力图和阅读记录。" />;
+  }
+
+  const activeRecord = data.records
+    .find((record) => record.year === activeYear) ?? data.records.at(-1)!;
   const splitHeatmapSegments = splitHeatmapCells(activeRecord.cells);
+
+  const topRead = (activeRecord.annual.readLongest ?? []).slice(0, 10).map((item) => ({
+    cover: item.book?.cover ?? item.albumInfo?.cover ?? "",
+    primary: item.book?.title ?? item.albumInfo?.name ?? "未知条目",
+    secondary: item.book?.author ?? item.albumInfo?.authorName ?? "",
+    meta: formatDuration(item.readTime ?? 0),
+  }));
+  const highlight = activeRecord.annotations.recentHighlights;
+  const review = activeRecord.annotations.recentReviews;
+
 
   return (
     <section className="mx-auto grid w-full max-w-4xl gap-10 max-md:gap-8">
@@ -88,16 +101,102 @@ function HistoryScreen() {
         <section className="grid gap-8 lg:grid-cols-3 lg:items-start">
           <RankList
             title="Top Read"
-            items={(activeRecord.annual.readLongest ?? []).slice(0, 10).map((item) => ({
-              cover: item.book?.cover ?? item.albumInfo?.cover ?? "",
-              primary: item.book?.title ?? item.albumInfo?.name ?? "未知条目",
-              secondary: item.book?.author ?? item.albumInfo?.authorName ?? "",
-              meta: formatDuration(item.readTime ?? 0),
-            }))}
+            items={topRead}
           />
-          <AnnotationList title="Highlight" items={activeRecord.annotations.recentHighlights} emptyText={`No highlights in ${activeRecord.year}`} />
-          <AnnotationList title="Review" items={activeRecord.annotations.recentReviews} emptyText={`No reviews in ${activeRecord.year}`} />
+          <AnnotationList title="Highlight" items={highlight} emptyText={`No highlights in ${activeRecord.year}`} />
+          <AnnotationList title="Review" items={review} emptyText={`No reviews in ${activeRecord.year}`} />
         </section>
+    </section>
+  );
+}
+
+function HistorySkeleton() {
+  const emptyHeatmapSegments = splitHeatmapCells(createEmptyHeatmapCells(CURRENT_YEAR));
+
+  return (
+    <section className="mx-auto grid w-full max-w-4xl gap-10 max-md:gap-8">
+      <section className="grid min-w-0 gap-8 xl:grid-cols-[240px_minmax(0,1fr)] xl:items-start">
+        <ActivityStatsSkeleton />
+        <div className="min-w-0 overflow-hidden md:overflow-visible">
+          <div className="mb-4 text-3xl font-semibold text-foreground md:text-4xl">Activity</div>
+          <div className="flex w-full min-w-0 flex-col gap-5 overflow-hidden md:flex-row md:items-start md:overflow-visible">
+            <div data-year-list className="flex w-full min-w-0 max-w-full gap-4 overflow-x-auto overflow-y-hidden px-0.5 md:w-auto md:flex-col md:overflow-visible md:scrollbar-none max-md:w-[calc(100vw-40px)] max-md:max-w-[calc(100vw-40px)] max-md:[&::-webkit-scrollbar]:hidden">
+              {LOADING_YEARS.map((year) => (
+                <div
+                  key={year}
+                  className={[
+                    "grid min-h-7 flex-none justify-items-start text-left text-muted-foreground",
+                    year === CURRENT_YEAR ? "translate-x-0.5 text-foreground max-md:translate-x-0" : "",
+                  ].join(" ")}
+                >
+                  <span
+                    className={[
+                      "leading-none text-xl",
+                      year === CURRENT_YEAR ? "text-[24px] text-foreground" : "",
+                    ].join(" ")}
+                  >
+                    {year}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <Heatmap maxValue={1} splitSegments={emptyHeatmapSegments} />
+          </div>
+        </div>
+      </section>
+      <section className="grid gap-8 lg:grid-cols-3 lg:items-start">
+        <HistoryListSkeleton title="Top Read" />
+        <HistoryListSkeleton title="Highlight" />
+        <HistoryListSkeleton title="Review" />
+      </section>
+    </section>
+  );
+}
+
+function ActivityStatsSkeleton() {
+  const metrics = ["Read Time", "Notebook Books", "Highlight", "Review"];
+
+  return (
+    <aside className="grid grid-cols-2 gap-x-6 gap-y-6 xl:grid-cols-1">
+      {metrics.map((label, index) => (
+        <div key={label}>
+          <div className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground/75">{label}</div>
+          <Skeleton className={index === 0 ? "mt-2 h-9 w-36" : "mt-2 h-9 w-12"} />
+        </div>
+      ))}
+    </aside>
+  );
+}
+
+function HistoryListSkeleton({ title }: { title: string }) {
+  return (
+    <section>
+      <h2 className="mb-4 text-2xl font-semibold text-foreground">{title}</h2>
+      <div className="flex flex-col gap-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="grid grid-cols-[44px_1fr] gap-3">
+            <Skeleton className="size-11 rounded-md" />
+            <div className="min-w-0">
+              <Skeleton className="h-4 w-4/5" />
+              <Skeleton className="mt-2 h-3 w-2/3" />
+              <Skeleton className="mt-2 h-3 w-1/2" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function HistoryEmptyState({ title, description, detail }: { title: string; description: string; detail?: string }) {
+  return (
+    <section className="mx-auto flex min-h-[50vh] w-full max-w-4xl items-center">
+      <div className="max-w-xl">
+        <div className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground/75">History</div>
+        <h2 className="mt-3 text-4xl font-semibold text-foreground">{title}</h2>
+        <p className="mt-4 text-base leading-7 text-muted-foreground">{description}</p>
+        {detail ? <p className="mt-4 max-w-lg text-sm leading-6 text-muted-foreground/80">{detail}</p> : null}
+      </div>
     </section>
   );
 }
@@ -118,6 +217,28 @@ type HeatmapSegment = {
   weekCount: number;
   monthMarkers: Array<{ month: number; column: number }>;
 };
+
+function createEmptyHeatmapCells(year: number): HistoryCell[] {
+  const start = new Date(Date.UTC(year, 0, 1));
+  const mondayOffset = (start.getUTCDay() + 6) % 7;
+  start.setUTCDate(start.getUTCDate() - mondayOffset);
+
+  return Array.from({ length: 53 * 7 }, (_, index) => {
+    const date = new Date(start);
+    date.setUTCDate(start.getUTCDate() + index);
+    const weekIndex = Math.floor(index / 7);
+    const label = date.toISOString().slice(0, 10);
+
+    return {
+      key: `loading-${label}`,
+      label,
+      seconds: 0,
+      month: date.getUTCMonth(),
+      weekIndex,
+      inYear: date.getUTCFullYear() === year,
+    };
+  });
+}
 
 function splitHeatmapCells(cells: HistoryCell[]): HeatmapSegment[] {
   const segments = [
@@ -244,7 +365,7 @@ function AnnotationList({
   emptyText,
 }: {
   title: string;
-  items: Array<{ bookTitle: string; cover: string; content: string; createTime: number }>;
+  items: Array<{ bookTitle: string; cover: string | null; content: string; createTime: number }>;
   emptyText: string;
 }) {
   return (

@@ -1,16 +1,6 @@
 export const ONE_DAY_SECONDS = 86400;
 
-export function nowUnix() {
-  return Math.floor(Date.now() / 1000);
-}
-
-export function toJson(value: unknown) {
-  return JSON.stringify(value);
-}
-
-export function parseJson<T>(value: string) {
-  return JSON.parse(value) as T;
-}
+export { nowUnix } from "../time.ts";
 
 export function estimateReadingPeriodCount(registTime: number | undefined, now: number) {
   const start = registTime ?? Math.floor(Date.UTC(new Date().getFullYear(), 0, 1) / 1000);

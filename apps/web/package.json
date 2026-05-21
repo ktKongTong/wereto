@@ -9,8 +9,9 @@
     "db:generate": "drizzle-kit generate && pnpm run db:sync",
     "db:sync": "node scripts/sync-d1-migrations.ts",
     "db:push": "drizzle-kit push",
-    "migration": "wrangler --config=../../wrangler.jsonc d1 migrations apply DB --remote",
-    "deploy": "pnpm run migration && wrangler deploy --config=./build/server/wrangler.json"
+    "migration": "wrangler --config=../../wrangler.jsonc d1 migrations apply DB",
+    "migration:remote": "wrangler --config=../../wrangler.jsonc d1 migrations apply DB --remote",
+    "deploy": "pnpm run migration:remote && wrangler deploy --config=./build/server/wrangler.json"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -23,6 +24,7 @@
     "hono": "^4.12.19",
     "isbot": "^5.1.31",
     "lucide-react": "^0.542.0",
+    "p-limit": "catalog:",
     "radix-ui": "^1.4.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

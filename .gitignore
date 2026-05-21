@@ -42,4 +42,5 @@ deno.jsonc
 .env
 .env*
 build
-.reatct-router
+.react-router
+**/.react-router

@@ -1,7 +1,8 @@
 import { Outlet, useOutletContext } from "react-router";
-import { useCallback, useState } from "react";
+import {useCallback, useEffect, useState} from "react";
 
 import { AppShell } from "../../components/app-shell";
+import {useSessionQuery} from "@/lib/queries.ts";
 
 type ShellContext = {
   openSettings: (initialTab?: "sync" | "account" | "appearance" | "about") => void;
@@ -15,6 +16,13 @@ export default function ShellLayout() {
     setSettingsInitialTab(initialTab);
     setSettingsOpen(true);
   }, []);
+  const session = useSessionQuery();
+  const canView = Boolean(session.data?.authenticated || session.data?.public);
+  useEffect(() => {
+    if (!session.isPending && !canView) {
+      openSettings("account");
+    }
+  }, [canView, openSettings, session.isPending]);
 
   return (
     <AppShell

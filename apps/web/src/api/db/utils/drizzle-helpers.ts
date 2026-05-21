@@ -1,13 +1,12 @@
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
+import type { AnySQLiteColumn, AnySQLiteTable, SQLiteUpdateSetSource } from "drizzle-orm/sqlite-core";
 
-export function excludedSet(columns: string[]) {
-  return Object.fromEntries(columns.map((column) => [toCamel(column), sql.raw(`excluded.${column}`)]));
+export type ConflictUpdateColumns = Record<string, AnySQLiteColumn>;
+
+export function excluded(column: AnySQLiteColumn): SQL {
+  return sql.raw(`excluded.${column.name}`);
 }
 
-export function pick(source: Record<string, unknown>, keys: string[]) {
-  return Object.fromEntries(keys.map((key) => [key, source[key] ?? null]));
-}
-
-export function toCamel(column: string) {
-  return column.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+export function excludedUpdateSet<TTable extends AnySQLiteTable>(columns: ConflictUpdateColumns): SQLiteUpdateSetSource<TTable> {
+  return Object.fromEntries(Object.entries(columns).map(([key, column]) => [key, excluded(column)])) as SQLiteUpdateSetSource<TTable>;
 }

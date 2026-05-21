@@ -1,13 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 
-import type { ArchiveReadBook, ArchiveTimelineItem, ShelfAlbumItem, ShelfBookItem } from "../../api/weread";
-import { formatDate, formatDuration } from "../../lib/format";
-import { useArchiveQuery, useSessionQuery } from "../../lib/queries";
-import { useShell } from "./layout";
+import type { ArchiveReadBook, ArchiveShelfAlbum, ArchiveShelfBook, ArchiveTimelineItem } from "@/api/read-models/archive.read-model.ts";
+import { Skeleton } from "@/components/ui/skeleton.tsx";
+import { formatDate, formatDuration } from "@/lib/format.ts";
+import { useArchiveQuery, useSessionQuery } from "@/lib/queries.ts";
 
 const PAGE_SIZE = 24;
 
 type ArchiveTab = "shelf" | "read" | "highlights" | "reviews";
+
+const ARCHIVE_TABS: Array<{ key: ArchiveTab; label: string }> = [
+  { key: "shelf", label: "书架" },
+  { key: "read", label: "读过" },
+  { key: "highlights", label: "划线" },
+  { key: "reviews", label: "想法" },
+];
+const archiveTabTextClass = "text-2xl font-semibold text-foreground";
+const archiveTabMutedTextClass = "text-2xl text-muted-foreground";
 
 type ShelfEntry = {
   id: string;
@@ -25,7 +34,6 @@ function ArchiveScreen() {
   const session = useSessionQuery();
   const canView = Boolean(session.data?.authenticated || session.data?.public);
   const { data, error, isPending } = useArchiveQuery(canView);
-  const { openSettings } = useShell();
   const [activeTab, setActiveTab] = useState<ArchiveTab>("shelf");
   const [pageByTab, setPageByTab] = useState<Record<ArchiveTab, number>>({
     shelf: 1,
@@ -34,26 +42,22 @@ function ArchiveScreen() {
     reviews: 1,
   });
 
-  useEffect(() => {
-    if (!session.isPending && !canView) {
-      openSettings("account");
-    }
-  }, [canView, openSettings, session.isPending]);
-
   if (error) {
-    return <main className="mx-auto max-w-5xl px-6 py-20 text-red-600">{error instanceof Error ? error.message : "加载失败"}</main>;
-  }
-
-  if (!session.isPending && !canView) {
     return (
-      <section className="max-w-xl space-y-4 pt-10">
-        <h2 className="text-3xl font-semibold text-foreground">Private, please login first</h2>
-      </section>
+      <ArchiveEmptyState
+        title="档案数据不可用"
+        description="当前无法加载书架、读过、划线和想法。"
+        detail={error instanceof Error ? error.message : "未知错误"}
+      />
     );
   }
 
+  if (!session.isPending && !canView) {
+    return <ArchiveEmptyState title="阅读数据未公开" description="登录后可以查看书架、读过的书、划线和想法。" />;
+  }
+
   if (session.isPending || isPending || !data) {
-    return <main className="mx-auto max-w-5xl px-6 py-20 text-foreground/60">Loading archive...</main>;
+    return <ArchiveSkeleton />;
   }
 
   const shelfEntries = toShelfEntries([...data.shelfBooks, ...data.shelfAlbums]);
@@ -97,10 +101,11 @@ function ArchiveScreen() {
           />
 
           <div>
-            {activeTab === "shelf" ? <ShelfGrid items={pageItems as ShelfEntry[]} /> : null}
-            {activeTab === "read" ? <ReadBookGrid items={pageItems as ArchiveReadBook[]} /> : null}
-            {activeTab === "highlights" ? <TimelineGrid items={pageItems as ArchiveTimelineItem[]} /> : null}
-            {activeTab === "reviews" ? <TimelineGrid items={pageItems as ArchiveTimelineItem[]} /> : null}
+            {pageItems.length === 0 ? <ArchiveTabEmptyState activeTab={activeTab} /> : null}
+            {pageItems.length > 0 && activeTab === "shelf" ? <ShelfGrid items={pageItems as ShelfEntry[]} /> : null}
+            {pageItems.length > 0 && activeTab === "read" ? <ReadBookGrid items={pageItems as ArchiveReadBook[]} /> : null}
+            {pageItems.length > 0 && activeTab === "highlights" ? <TimelineGrid items={pageItems as ArchiveTimelineItem[]} /> : null}
+            {pageItems.length > 0 && activeTab === "reviews" ? <TimelineGrid items={pageItems as ArchiveTimelineItem[]} /> : null}
           </div>
 
           <Pagination
@@ -112,6 +117,58 @@ function ArchiveScreen() {
           />
         </section>
     </section>
+  );
+}
+
+function ArchiveSkeleton() {
+  return (
+    <section className="mx-auto grid w-full max-w-4xl gap-10">
+      <ArchiveSummarySkeleton />
+      <section className="flex flex-col gap-6">
+        <ArchiveTabsSkeleton />
+        <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 12 }).map((_, index) => (
+            <div key={index} className="grid grid-cols-[48px_1fr] gap-3">
+              <Skeleton className="size-12 rounded-md" />
+              <div className="min-w-0">
+                <Skeleton className="h-5 w-4/5" />
+                <Skeleton className="mt-2 h-4 w-2/3" />
+                <Skeleton className="mt-2 h-3 w-1/2" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <PaginationSkeleton />
+      </section>
+    </section>
+  );
+}
+
+function ArchiveEmptyState({ title, description, detail }: { title: string; description: string; detail?: string }) {
+  return (
+    <section className="mx-auto flex min-h-[50vh] w-full max-w-4xl items-center">
+      <div className="max-w-xl">
+        <div className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground/75">Archive</div>
+        <h2 className="mt-3 text-4xl font-semibold text-foreground">{title}</h2>
+        <p className="mt-4 text-base leading-7 text-muted-foreground">{description}</p>
+        {detail ? <p className="mt-4 max-w-lg text-sm leading-6 text-muted-foreground/80">{detail}</p> : null}
+      </div>
+    </section>
+  );
+}
+
+function ArchiveTabEmptyState({ activeTab }: { activeTab: ArchiveTab }) {
+  const copy = {
+    shelf: "书架为空。同步后会在这里分页展示当前书架。",
+    read: "读过列表为空。同步阅读统计后会在这里展示历史读过的书。",
+    highlights: "划线为空。同步笔记后会在这里展示所有划线。",
+    reviews: "想法为空。同步笔记后会在这里展示所有书评和想法。",
+  } satisfies Record<ArchiveTab, string>;
+
+  return (
+    <div className="flex min-h-64 items-center">
+      <p className="max-w-md text-base leading-7 text-muted-foreground">{copy[activeTab]}</p>
+    </div>
   );
 }
 
@@ -127,7 +184,7 @@ function ArchiveSummary({
   reviewCount: number;
 }) {
   return (
-    <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+    <section className="grid gap-6 grid-cols-2 lg:grid-cols-4">
       <Metric label="书架" value={String(shelfCount)} />
       <Metric label="读过" value={String(readCount)} />
       <Metric label="划线" value={String(highlightCount)} />
@@ -145,29 +202,51 @@ function ArchiveTabs({
   counts: Record<ArchiveTab, number>;
   onTabChange: (tab: ArchiveTab) => void;
 }) {
-  const tabs: Array<{ key: ArchiveTab; label: string }> = [
-    { key: "shelf", label: "书架" },
-    { key: "read", label: "读过" },
-    { key: "highlights", label: "划线" },
-    { key: "reviews", label: "想法" },
-  ];
-
   return (
     <div className="flex flex-wrap items-baseline gap-x-8 gap-y-3">
-      {tabs.map((tab) => {
+      {ARCHIVE_TABS.map((tab) => {
         const active = tab.key === activeTab;
         return (
           <button
             key={tab.key}
             type="button"
             onClick={() => onTabChange(tab.key)}
-            className={`text-left transition ${active ? "text-3xl font-semibold text-foreground" : "text-2xl text-muted-foreground hover:text-foreground/75"}`}
+            className={`text-left transition ${active ? archiveTabTextClass : `${archiveTabMutedTextClass} hover:text-foreground/75`}`}
           >
             {tab.label}
             <span className="ml-2 align-baseline text-sm text-muted-foreground/75">{counts[tab.key]}</span>
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function ArchiveSummarySkeleton() {
+  return (
+    <section className="grid grid-cols-2 gap-6 lg:grid-cols-4">
+      {ARCHIVE_TABS.map((tab) => (
+        <div key={tab.key}>
+          <div className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground/75">{tab.label}</div>
+          <Skeleton className="mt-2 h-10 w-16" />
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function ArchiveTabsSkeleton() {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-8 gap-y-3">
+      {ARCHIVE_TABS.map((tab) => (
+        <div
+          key={tab.key}
+          className={`text-left ${tab.key === "shelf" ? archiveTabTextClass : archiveTabMutedTextClass}`}
+        >
+          {tab.label}
+          <Skeleton className="ml-2 inline-block h-3 w-7 align-baseline" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -291,7 +370,28 @@ function Pagination({
   );
 }
 
-function toShelfEntries(items: Array<ShelfBookItem | ShelfAlbumItem>): ShelfEntry[] {
+function PaginationSkeleton() {
+  return (
+    <div className="flex items-center justify-between border-t border-border pt-5 text-sm text-muted-foreground">
+      <div className="flex items-center gap-1.5">
+        <Skeleton className="h-4 w-8" />
+        <span>/</span>
+        <Skeleton className="h-4 w-8" />
+      </div>
+      <div className="flex items-center gap-4">
+        <span className="text-foreground/60">上一页</span>
+        <span className="flex items-center gap-1.5">
+          <Skeleton className="h-4 w-4" />
+          <span>/</span>
+          <Skeleton className="h-4 w-4" />
+        </span>
+        <span className="text-foreground/60">下一页</span>
+      </div>
+    </div>
+  );
+}
+
+function toShelfEntries(items: Array<ArchiveShelfBook | ArchiveShelfAlbum>): ShelfEntry[] {
   return items.map((item, index) => {
     const isAlbum = "albumInfo" in item;
     if (isAlbum) {

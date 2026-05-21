@@ -1,21 +1,19 @@
-import { createRRApp } from "../src/app/server";
-import { cleanupTimedOutSyncRuns } from "../src/api/sync-cleanup";
-import { WeretoSyncWorkflow, type WereadSyncWorkflowEnv } from "../src/api/sync-workflow";
+import { createRRApp } from "@/app/server.ts";
+import { cleanupTimedOutSyncRuns } from "@/api/sync-cleanup.ts";
+import { WeretoSyncWorkflow, type WereadSyncWorkflowEnv } from "@/api/sync-workflow.ts";
 
 export { WeretoSyncWorkflow };
 
-const app = createRRApp({
-  runtime: "workerd",
-  api: {
-    adapter: {},
-  },
-});
-
 export default {
-  fetch: app.fetch,
+  fetch: createRRApp().fetch,
   async scheduled(_controller, env) {
-    const cleaned = await cleanupTimedOutSyncRuns(env);
-    console.log(`sync cleanup processed ${cleaned} timed out run(s)`);
+    if(_controller.cron === "*/5 * * * *") {
+      const cleaned = await cleanupTimedOutSyncRuns(env);
+      console.log(`sync cleanup processed ${cleaned} timed out run(s)`);
+    }
+
+    if(_controller.cron === "0 20 * * *") {
+    }
   },
   queue: () => {}
 } satisfies ExportedHandler<WereadSyncWorkflowEnv>;

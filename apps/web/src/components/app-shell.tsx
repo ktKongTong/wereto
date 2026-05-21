@@ -2,10 +2,11 @@ import { Link, useLocation } from "react-router";
 import { useState } from "react";
 
 import { SettingsDialog } from "./settings-dialog";
+import {ChartNoAxesColumn, Menu, Book } from "lucide-react";
 
 const navItems = [
-  { to: "/", label: "History", glyph: "◔" },
-  { to: "/archive", label: "Archive", glyph: "☰" },
+  { to: "/", label: "History", glyph: <Book /> },
+  { to: "/archive", label: "Archive", glyph: <ChartNoAxesColumn /> },
 ];
 
 export function AppShell({
@@ -56,7 +57,7 @@ export function AppShell({
               title="Settings"
               className="flex size-10 items-center justify-center rounded-full border border-border bg-background/40 text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
             >
-              ☷
+              <Menu />
             </button>
           </div>
         </div>
@@ -92,7 +93,7 @@ export function AppShell({
               title="Settings"
               className="flex size-9 items-center justify-center rounded-full border border-border bg-background/40 text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
             >
-              ☷
+              <Menu />
             </button>
           </div>
         </aside>

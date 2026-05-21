@@ -1,7 +1,8 @@
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { ArchiveNotebookDetail, ArchiveReadBook, ArchiveTimelineItem, HistoryYearRecord, ShelfAlbumItem, ShelfBookItem } from "../api/weread";
+import type { ArchiveNotebookDetail, ArchiveReadBook, ArchiveShelfAlbum, ArchiveShelfBook, ArchiveTimelineItem } from "../api/read-models/archive.read-model";
+import type { HistoryYearRecord } from "../api/read-models/history.read-model";
 import { fetchJson } from "./api";
 
 export type SessionPayload = {
@@ -41,8 +42,8 @@ export type HistoryPayload = {
 };
 
 export type ArchivePayload = {
-  shelfBooks: ShelfBookItem[];
-  shelfAlbums: ShelfAlbumItem[];
+  shelfBooks: ArchiveShelfBook[];
+  shelfAlbums: ArchiveShelfAlbum[];
   mp: Record<string, unknown> | null;
   notebookBooks: Array<{ bookId: string }>;
   notebookDetails: ArchiveNotebookDetail[];

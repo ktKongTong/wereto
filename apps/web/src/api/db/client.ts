@@ -6,8 +6,8 @@ export interface DbEnv {
   DB: D1Database;
 }
 
-export function getDb(env: DbEnv) {
-  return drizzle(env.DB, { schema });
+export function getDB(env: DbEnv) {
+  return drizzle(env.DB, { schema })
 }
 
-export type AppDb = ReturnType<typeof getDb>;
+export type DB = ReturnType<typeof getDB>;

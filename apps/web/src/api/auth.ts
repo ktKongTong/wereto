@@ -1,138 +1,124 @@
-import type { AppDb } from "./db/client.ts";
+import type { Context } from "hono";
+import { deleteCookie, getSignedCookie, setSignedCookie } from "hono/cookie";
+import { createMiddleware } from "hono/factory";
+
+import type { DB } from "./db/client.ts";
+import type { DbEnv } from "./db/client.ts";
 import { getBooleanConfig, getConfigValue, upsertBooleanConfig, upsertConfigValue } from "./db/config.ts";
 
 const AUTH_COOKIE = "weread_session";
 
-export async function isAuthenticated(request: Request, db: AppDb): Promise<boolean> {
+type ApiContext = Context<{ Bindings: DbEnv }>;
+
+const cookieOptions = {
+  path: "/",
+  httpOnly: true,
+  sameSite: "Lax",
+} as const;
+
+export async function isAuthenticated(c: ApiContext, db: DB): Promise<boolean> {
   const password = await getPassword(db);
-  const cookie = request.headers.get("cookie") ?? "";
-  return password ? parseCookie(cookie)[AUTH_COOKIE] === createSessionValue(password) : false;
+  return password ? (await getSignedCookie(c, password, AUTH_COOKIE)) === "1" : false;
 }
 
-export async function requireAuth(request: Request, db: AppDb): Promise<Response | null> {
-  if (await isAuthenticated(request, db)) {
-    return null;
+export const requireAuth = createMiddleware<{ Bindings: DbEnv }>(async (c, next) => {
+  if (!(await isAuthenticated(c, c.get("db")))) {
+    return c.json({ error: "Unauthorized" }, 401);
   }
 
-  return Response.json({ error: "Unauthorized" }, { status: 401 });
-}
+  await next();
+});
 
-export async function requireAuthOrPublic(request: Request, db: AppDb): Promise<Response | null> {
-  if ((await isPublic(db)) || (await isAuthenticated(request, db))) {
-    return null;
+export const requireAuthOrPublic = createMiddleware<{ Bindings: DbEnv }>(async (c, next) => {
+  const db = c.get("db");
+  if (!(await isPublic(db)) && !(await isAuthenticated(c, db))) {
+    return c.json({ error: "Unauthorized" }, 401);
   }
 
-  return Response.json({ error: "Unauthorized" }, { status: 401 });
-}
+  await next();
+});
 
-export async function login(request: Request, db: AppDb): Promise<Response> {
+export async function login(c: ApiContext): Promise<Response> {
+  const db = c.get("db");
   const password = await getPassword(db);
-  const body = (await request.json().catch(() => ({}))) as { password?: string };
+  const body = (await c.req.json().catch(() => ({}))) as { password?: string };
   if (!password || body.password !== password) {
-    return Response.json({ ok: false, error: "Invalid password" }, { status: 401 });
+    return c.json({ ok: false, error: "Invalid password" }, 401);
   }
 
-  const response = Response.json({ ok: true });
-  response.headers.append("Set-Cookie", serializeCookie(AUTH_COOKIE, createSessionValue(password)));
-  return response;
+  await setAuthCookie(c, password);
+  return c.json({ ok: true });
 }
 
-export function logout(): Response {
-  const response = Response.json({ ok: true });
-  response.headers.append("Set-Cookie", serializeCookie(AUTH_COOKIE, "", { maxAge: 0 }));
-  return response;
+export function logout(c: ApiContext): Response {
+  deleteCookie(c, AUTH_COOKIE, { path: "/" });
+  return c.json({ ok: true });
 }
 
-export async function session(request: Request, db: AppDb): Promise<Response> {
-  return Response.json({
-    authenticated: await isAuthenticated(request, db),
+export async function session(c: ApiContext): Promise<Response> {
+  const db = c.get("db");
+  return c.json({
+    authenticated: await isAuthenticated(c, db),
     public: await isPublic(db),
     passwordChanged: await getBooleanConfig(db, "auth.passwordChanged", false),
     hasApiKey: Boolean(await getConfigValue(db, "weread.apiKey")),
   });
 }
 
-export async function getPublicSetting(db: AppDb): Promise<Response> {
-  return Response.json({ public: await isPublic(db) });
+export async function getPublicSetting(c: ApiContext): Promise<Response> {
+  return c.json({ public: await isPublic(c.get("db")) });
 }
 
-export async function setPublicSetting(request: Request, db: AppDb): Promise<Response> {
-  const body = (await request.json().catch(() => ({}))) as { public?: boolean };
+export async function setPublicSetting(c: ApiContext): Promise<Response> {
+  const db = c.get("db");
+  const body = (await c.req.json().catch(() => ({}))) as { public?: boolean };
   await upsertBooleanConfig(db, "site.public", Boolean(body.public));
-  return Response.json({ public: Boolean(body.public) });
+  return c.json({ public: Boolean(body.public) });
 }
 
-export async function getAccountSettings(db: AppDb): Promise<Response> {
-  return Response.json({
+export async function getAccountSettings(c: ApiContext): Promise<Response> {
+  const db = c.get("db");
+  return c.json({
     public: await isPublic(db),
     passwordChanged: await getBooleanConfig(db, "auth.passwordChanged", false),
     hasApiKey: Boolean(await getConfigValue(db, "weread.apiKey")),
   });
 }
 
-export async function setPassword(request: Request, db: AppDb): Promise<Response> {
-  const body = (await request.json().catch(() => ({}))) as { password?: string };
+export async function setPassword(c: ApiContext): Promise<Response> {
+  const db = c.get("db");
+  const body = (await c.req.json().catch(() => ({}))) as { password?: string };
   const nextPassword = body.password?.trim() ?? "";
   if (nextPassword.length < 4) {
-    return Response.json({ ok: false, error: "Password must be at least 4 characters" }, { status: 400 });
+    return c.json({ ok: false, error: "Password must be at least 4 characters" }, 400);
   }
 
   await upsertConfigValue(db, "auth.password", nextPassword);
   await upsertBooleanConfig(db, "auth.passwordChanged", true);
-
-  const response = Response.json({ ok: true, passwordChanged: true });
-  response.headers.append("Set-Cookie", serializeCookie(AUTH_COOKIE, createSessionValue(nextPassword)));
-  return response;
+  await setAuthCookie(c, nextPassword);
+  return c.json({ ok: true, passwordChanged: true });
 }
 
-export async function setApiKey(request: Request, db: AppDb): Promise<Response> {
-  const body = (await request.json().catch(() => ({}))) as { apiKey?: string };
+export async function setApiKey(c: ApiContext): Promise<Response> {
+  const body = (await c.req.json().catch(() => ({}))) as { apiKey?: string };
   const apiKey = body.apiKey?.trim() ?? "";
   if (!apiKey) {
-    return Response.json({ ok: false, error: "API key is required" }, { status: 400 });
+    return c.json({ ok: false, error: "API key is required" }, 400);
   }
 
-  await upsertConfigValue(db, "weread.apiKey", apiKey);
-  return Response.json({ ok: true, hasApiKey: true });
+  await upsertConfigValue(c.get("db"), "weread.apiKey", apiKey);
+  return c.json({ ok: true, hasApiKey: true });
 }
 
-async function isPublic(db: AppDb) {
+async function isPublic(db: DB) {
   return getBooleanConfig(db, "site.public", false);
 }
 
-function createSessionValue(password: string): string {
-  return `ok:${password}`;
+async function setAuthCookie(c: ApiContext, password: string) {
+  await setSignedCookie(c, AUTH_COOKIE, "1", password, cookieOptions);
 }
 
-async function getPassword(db: AppDb) {
-  const passwordChanged = await getBooleanConfig(db, "auth.passwordChanged", false);
+async function getPassword(db: DB) {
   const existing = await getConfigValue(db, "auth.password");
-  if (existing && passwordChanged) {
-    return existing;
-  }
-
-  await upsertConfigValue(db, "auth.password", "weread");
-  await upsertBooleanConfig(db, "auth.passwordChanged", false);
-  return "weread";
-}
-
-function parseCookie(value: string): Record<string, string> {
-  return Object.fromEntries(
-    value
-      .split(";")
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .map((part) => {
-        const [key, ...rest] = part.split("=");
-        return [key, rest.join("=")];
-      }),
-  );
-}
-
-function serializeCookie(name: string, value: string, options: { maxAge?: number } = {}): string {
-  const parts = [`${name}=${value}`, "Path=/", "HttpOnly", "SameSite=Lax"];
-  if (options.maxAge !== undefined) {
-    parts.push(`Max-Age=${options.maxAge}`);
-  }
-  return parts.join("; ");
+  return existing
 }

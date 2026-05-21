@@ -15,7 +15,7 @@ import {
 } from "../lib/queries";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Dialog, DialogContent } from "./ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { ScrollArea } from "./ui/scroll-area";
@@ -100,6 +100,10 @@ export function SettingsDialog({
         aria-describedby="settings-description"
         showCloseButton={false}
       >
+        <DialogTitle className="sr-only">Settings</DialogTitle>
+        <DialogDescription id="settings-description" className="sr-only">
+          管理登录、同步任务、主题和本地数据可见性。
+        </DialogDescription>
         <Tabs
           value={activeTab}
           onValueChange={(value) => setActiveTab(value as SettingsTab)}
@@ -499,7 +503,7 @@ function Notice({ tone, children }: { tone: "warning" | "error" | "success"; chi
         ? "border-primary/30 bg-primary/10 text-foreground"
         : "border-primary/30 bg-primary/10 text-foreground";
 
-  return <div className={`rounded-lg border px-3 py-2 text-sm leading-6 ${className}`}>{children}</div>;
+  return <div className={`rounded-lg border px-3 py-2 text-sm leading-6 my-2 ${className}`}>{children}</div>;
 }
 
 function formatLogTime(timestamp: number) {
