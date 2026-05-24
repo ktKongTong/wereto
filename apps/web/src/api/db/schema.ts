@@ -38,8 +38,12 @@ export const syncRunLogs = sqliteTable(
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     runId: integer("run_id").notNull(),
+    seq: integer("seq"),
     level: text("level").notNull().default("info"),
     phase: text("phase").notNull(),
+    phaseId: text("phase_id"),
+    phaseName: text("phase_name"),
+    workerId: text("worker_id"),
     message: text("message").notNull(),
     progressCurrent: integer("progress_current"),
     progressTotal: integer("progress_total"),
@@ -47,8 +51,29 @@ export const syncRunLogs = sqliteTable(
     createdAt: integer("created_at").notNull(),
   },
   (table) => [
+    uniqueIndex("sync_run_logs_run_seq_idx").on(table.runId, table.seq),
     index("sync_run_logs_run_created_idx").on(table.runId, table.createdAt),
     index("sync_run_logs_level_idx").on(table.level),
+  ],
+);
+
+export const syncStageChunks = sqliteTable(
+  "sync_stage_chunks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    runId: integer("run_id").notNull(),
+    stage: text("stage").notNull(),
+    chunkIndex: integer("chunk_index").notNull(),
+    offset: integer("offset").notNull(),
+    size: integer("size").notNull(),
+    status: text("status").notNull().default("queued"),
+    resultJson: text("result_json", { mode: "json" }).$type<JsonRecord | null>(),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("sync_stage_chunks_run_stage_chunk_idx").on(table.runId, table.stage, table.chunkIndex),
+    index("sync_stage_chunks_run_stage_status_idx").on(table.runId, table.stage, table.status),
   ],
 );
 
@@ -65,14 +90,17 @@ export const syncSnapshotBooks = sqliteTable(
     wereadBookId: text("weread_book_id").notNull(),
     title: text("title").notNull(),
     author: text("author"),
+    translator: text("translator"),
     cover: text("cover"),
     intro: text("intro"),
     category: text("category"),
     publisher: text("publisher"),
+    publishTime: text("publish_time"),
     isbn: text("isbn"),
     wordCount: integer("word_count"),
     rating: integer("rating"),
     ratingCount: integer("rating_count"),
+    ratingDetailJson: text("rating_detail_json", { mode: "json" }).$type<JsonRecord | null>(),
     rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
   },
   (table) => [uniqueIndex("sync_snapshot_books_run_book_idx").on(table.runId, table.wereadBookId)],
@@ -131,29 +159,6 @@ export const syncSnapshotNotebookBooks = sqliteTable(
     rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
   },
   (table) => [uniqueIndex("sync_snapshot_notebook_books_run_book_idx").on(table.runId, table.wereadBookId)],
-);
-
-export const syncSnapshotBookInfo = sqliteTable(
-  "sync_snapshot_book_info",
-  {
-    ...snapshotBase,
-    wereadBookId: text("weread_book_id").notNull(),
-    title: text("title").notNull(),
-    author: text("author"),
-    translator: text("translator"),
-    cover: text("cover"),
-    intro: text("intro"),
-    category: text("category"),
-    publisher: text("publisher"),
-    publishTime: text("publish_time"),
-    isbn: text("isbn"),
-    wordCount: integer("word_count"),
-    rating: integer("rating"),
-    ratingCount: integer("rating_count"),
-    ratingDetailJson: text("rating_detail_json", { mode: "json" }).$type<JsonRecord | null>(),
-    rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
-  },
-  (table) => [uniqueIndex("sync_snapshot_book_info_run_book_idx").on(table.runId, table.wereadBookId)],
 );
 
 export const syncSnapshotBookProgress = sqliteTable(
@@ -309,6 +314,23 @@ export const appConfig = sqliteTable("app_config", {
   updatedAt: integer("updated_at").notNull(),
 });
 
+export const apiKeys = sqliteTable(
+  "api_keys",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    keyHash: text("key_hash").notNull(),
+    keyPrefix: text("key_prefix").notNull(),
+    createdAt: integer("created_at").notNull(),
+    lastUsedAt: integer("last_used_at"),
+    revokedAt: integer("revoked_at"),
+  },
+  (table) => [
+    uniqueIndex("api_keys_key_hash_idx").on(table.keyHash),
+    index("api_keys_revoked_at_idx").on(table.revokedAt),
+  ],
+);
+
 export const books = sqliteTable(
   "books",
   {
@@ -316,14 +338,17 @@ export const books = sqliteTable(
     wereadBookId: text("weread_book_id").notNull(),
     title: text("title").notNull(),
     author: text("author"),
+    translator: text("translator"),
     cover: text("cover"),
     intro: text("intro"),
     category: text("category"),
     publisher: text("publisher"),
+    publishTime: text("publish_time"),
     isbn: text("isbn"),
     wordCount: integer("word_count"),
     rating: integer("rating"),
     ratingCount: integer("rating_count"),
+    ratingDetailJson: text("rating_detail_json", { mode: "json" }).$type<JsonRecord | null>(),
     rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
     updatedAt: integer("updated_at").notNull(),
   },
@@ -395,34 +420,6 @@ export const notebookBooks = sqliteTable(
     uniqueIndex("notebook_books_book_id_idx").on(table.bookId),
     index("notebook_books_total_count_idx").on(table.totalCount),
     index("notebook_books_sort_idx").on(table.sort),
-  ],
-);
-
-export const bookInfo = sqliteTable(
-  "book_info",
-  {
-    id: integer("id").primaryKey({ autoIncrement: true }),
-    bookId: integer("book_id").notNull(),
-    title: text("title").notNull(),
-    author: text("author"),
-    translator: text("translator"),
-    cover: text("cover"),
-    intro: text("intro"),
-    category: text("category"),
-    publisher: text("publisher"),
-    publishTime: text("publish_time"),
-    isbn: text("isbn"),
-    wordCount: integer("word_count"),
-    rating: integer("rating"),
-    ratingCount: integer("rating_count"),
-    ratingDetailJson: text("rating_detail_json", { mode: "json" }).$type<JsonRecord | null>(),
-    rawJson: text("raw_json", { mode: "json" }).$type<unknown>(),
-    updatedAt: integer("updated_at").notNull(),
-  },
-  (table) => [
-    uniqueIndex("book_info_book_id_idx").on(table.bookId),
-    index("book_info_title_idx").on(table.title),
-    index("book_info_author_idx").on(table.author),
   ],
 );
 

@@ -1,27 +1,24 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 
 import { nowUnix } from "../../time.ts";
 import type { DB } from "../client.ts";
 import {
   albums,
-  bookInfo,
   bookProgress,
   books,
   shelfItems,
   syncSnapshotAlbums,
-  syncSnapshotBookInfo,
   syncSnapshotBookProgress,
   syncSnapshotBooks,
   syncSnapshotShelfItems,
 } from "../schema.ts";
-import { bulkInsertStatements, bulkUpsert, chunkArray, executeStatementBatches, upsertOne } from "../utils/d1-bulk-writer.ts";
+import { bulkInsertStatements, bulkUpsert, chunkArray, executeStatementBatches, rowParamLimitedChunks, upsertOne } from "../utils/d1-bulk-writer.ts";
 
 type SnapshotInput<T> = Omit<T, "id" | "runId" | "createdAt">;
 
 export type BookSnapshotInput = SnapshotInput<typeof syncSnapshotBooks.$inferInsert>;
 export type AlbumSnapshotInput = SnapshotInput<typeof syncSnapshotAlbums.$inferInsert>;
 export type ShelfItemSnapshotInput = SnapshotInput<typeof syncSnapshotShelfItems.$inferInsert>;
-export type BookInfoSnapshotInput = SnapshotInput<typeof syncSnapshotBookInfo.$inferInsert>;
 export type BookProgressSnapshotInput = SnapshotInput<typeof syncSnapshotBookProgress.$inferInsert>;
 
 export class CatalogRepo {
@@ -32,17 +29,15 @@ export class CatalogRepo {
       this.db.delete(syncSnapshotBooks).where(eq(syncSnapshotBooks.runId, runId)),
       this.db.delete(syncSnapshotAlbums).where(eq(syncSnapshotAlbums.runId, runId)),
       this.db.delete(syncSnapshotShelfItems).where(eq(syncSnapshotShelfItems.runId, runId)),
-      this.db.delete(syncSnapshotBookInfo).where(eq(syncSnapshotBookInfo.runId, runId)),
       this.db.delete(syncSnapshotBookProgress).where(eq(syncSnapshotBookProgress.runId, runId)),
     ]);
   }
 
   async commitSnapshots(runId: number, now: number) {
-    const [bookSnapshots, albumSnapshots, shelfSnapshots, bookInfoSnapshots, bookProgressSnapshots] = await this.listCommitSnapshots(runId);
+    const [bookSnapshots, albumSnapshots, shelfSnapshots, bookProgressSnapshots] = await this.listCommitSnapshots(runId);
     const bookIdMap = await this.commitBooks(bookSnapshots, now);
     const albumIdMap = await this.commitAlbums(albumSnapshots, now);
     await this.replaceShelfFromSnapshot(shelfSnapshots, bookIdMap, albumIdMap, now);
-    await this.commitBookInfo(bookInfoSnapshots, bookIdMap, now);
     await this.commitBookProgress(bookProgressSnapshots, bookIdMap, now);
 
     return { bookIdMap, albumIdMap };
@@ -53,7 +48,6 @@ export class CatalogRepo {
       this.db.select().from(syncSnapshotBooks).where(eq(syncSnapshotBooks.runId, runId)),
       this.db.select().from(syncSnapshotAlbums).where(eq(syncSnapshotAlbums.runId, runId)),
       this.db.select().from(syncSnapshotShelfItems).where(eq(syncSnapshotShelfItems.runId, runId)),
-      this.db.select().from(syncSnapshotBookInfo).where(eq(syncSnapshotBookInfo.runId, runId)),
       this.db.select().from(syncSnapshotBookProgress).where(eq(syncSnapshotBookProgress.runId, runId)),
     ]);
   }
@@ -79,12 +73,6 @@ export class CatalogRepo {
   async stageShelfItems(runId: number, rows: ShelfItemSnapshotInput[]) {
     const createdAt = nowUnix();
     await bulkUpsert(this.db, syncSnapshotShelfItems, [syncSnapshotShelfItems.runId, syncSnapshotShelfItems.entityKey], rows.map((row) => ({ runId, createdAt, ...row })));
-  }
-
-
-  async stageBookInfos(runId: number, rows: BookInfoSnapshotInput[]) {
-    const createdAt = nowUnix();
-    await bulkUpsert(this.db, syncSnapshotBookInfo, [syncSnapshotBookInfo.runId, syncSnapshotBookInfo.wereadBookId], rows.map((row) => ({ runId, createdAt, ...row })));
   }
 
 
@@ -127,21 +115,6 @@ export class CatalogRepo {
     })));
   }
 
-  async commitBookInfo(rows: Array<typeof syncSnapshotBookInfo.$inferSelect>, bookIdMap: Map<string, number>, now: number) {
-    await this.upsertBookInfoRows(rows.flatMap((row) => {
-      const bookId = bookIdMap.get(row.wereadBookId);
-      if (!bookId) return [];
-      const { id: _id, runId: _runId, createdAt: _createdAt, wereadBookId: _wereadBookId, ...rest } = row;
-      return [{
-        ...rest,
-        bookId,
-        ratingDetailJson: row.ratingDetailJson,
-        rawJson: row.rawJson ?? null,
-        updatedAt: now,
-      }];
-    }));
-  }
-
   async commitBookProgress(rows: Array<typeof syncSnapshotBookProgress.$inferSelect>, bookIdMap: Map<string, number>, now: number) {
     await this.upsertBookProgressRows(rows.flatMap((row) => {
       const bookId = bookIdMap.get(row.wereadBookId);
@@ -157,7 +130,29 @@ export class CatalogRepo {
   }
 
   async upsertBooks(values: Array<typeof books.$inferInsert>) {
-    await bulkUpsert(this.db, books, books.wereadBookId, values);
+    if (values.length === 0) return;
+    await executeStatementBatches(this.db, rowParamLimitedChunks(values).map((chunk) =>
+      this.db.insert(books).values(chunk).onConflictDoUpdate({
+        target: books.wereadBookId,
+        set: {
+          title: sql`coalesce(nullif(excluded.title, ''), ${books.title})`,
+          author: sql`coalesce(nullif(excluded.author, ''), ${books.author})`,
+          translator: sql`coalesce(nullif(excluded.translator, ''), ${books.translator})`,
+          cover: sql`coalesce(nullif(excluded.cover, ''), ${books.cover})`,
+          intro: sql`coalesce(nullif(excluded.intro, ''), ${books.intro})`,
+          category: sql`coalesce(nullif(excluded.category, ''), ${books.category})`,
+          publisher: sql`coalesce(nullif(excluded.publisher, ''), ${books.publisher})`,
+          publishTime: sql`coalesce(nullif(excluded.publish_time, ''), ${books.publishTime})`,
+          isbn: sql`coalesce(nullif(excluded.isbn, ''), ${books.isbn})`,
+          wordCount: sql`coalesce(excluded.word_count, ${books.wordCount})`,
+          rating: sql`coalesce(excluded.rating, ${books.rating})`,
+          ratingCount: sql`coalesce(excluded.rating_count, ${books.ratingCount})`,
+          ratingDetailJson: sql`coalesce(excluded.rating_detail_json, ${books.ratingDetailJson})`,
+          rawJson: sql`coalesce(excluded.raw_json, ${books.rawJson})`,
+          updatedAt: sql`excluded.updated_at`,
+        },
+      })
+    ));
   }
 
   async upsertAlbums(values: Array<typeof albums.$inferInsert>) {
@@ -179,10 +174,6 @@ export class CatalogRepo {
       this.db.delete(shelfItems),
       ...bulkInsertStatements(this.db, shelfItems, values),
     ]);
-  }
-
-  async upsertBookInfoRows(values: Array<typeof bookInfo.$inferInsert>) {
-    await bulkUpsert(this.db, bookInfo, bookInfo.bookId, values);
   }
 
   async upsertBookProgressRows(values: Array<typeof bookProgress.$inferInsert>) {

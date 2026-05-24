@@ -19,7 +19,7 @@ export async function getChangedNotebooks(client: WereadClient, checkpoint: numb
   let lastSort: number | undefined;
 
   while (true) {
-    const page = await client.getNotebooks({ count: 50, ...(lastSort ? { lastSort } : {}) });
+    const page = await client.getNotebooks({ count: 50, lastSort });
     const booksOnPage = page.books?.map(notebookFromApiItem) ?? [];
 
     results.push(...booksOnPage);
@@ -44,21 +44,14 @@ export async function getNotebookContent(client: WereadClient, wereadBookId: str
   return { wereadBookId, bookmarkPayload, reviewsPayload };
 }
 
-export async function getReadingDaysForYear(
-  client: WereadClient,
-  year: number,
-  limit: <T>(callback: () => Promise<T>) => Promise<T>,
-) {
-  const annual = await client.getReadData({ mode: "annually", baseTime: Math.floor(Date.UTC(year, 0, 1) / 1000) });
+export async function getReadingDaysForYear(client: WereadClient, year: number) {
+  const annual = await client.getAnnuallyReadData({ year });
   if (annual.dailyReadTimes && Object.keys(annual.dailyReadTimes).length > 0) {
     return Object.entries(annual.dailyReadTimes).map(([timestamp, seconds]) => readingDayFromBucket(year, timestamp, seconds, "annual_daily"));
   }
 
   const monthlyPayloads = await Promise.all(Array.from({ length: 12 }, (_, monthIndex) =>
-    limit(() => client.getReadData({
-      mode: "monthly",
-      baseTime: Math.floor(Date.UTC(year, monthIndex, 1) / 1000),
-    }))
+    client.getMonthlyReadData({ year, month: monthIndex + 1 })
   ));
 
   return monthlyPayloads.flatMap((payload) =>

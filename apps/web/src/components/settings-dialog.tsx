@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { CheckCircle2, CircleDashed, CircleX, ExternalLink, LoaderCircle } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, CircleDashed, CircleX, Cpu, ExternalLink, LoaderCircle, PlayCircle, UsersRound } from "lucide-react";
 
 import { useAuth } from "../lib/auth";
 import { themeOptions, useTheme } from "../lib/theme";
 import {
+  type ExternalApiKey,
   type SyncRun,
+  useApiKeysQuery,
+  useClearResponseCacheMutation,
+  useCreateApiKeyMutation,
+  useRevokeApiKeyMutation,
   useSetPasswordMutation,
   useSetPublicMutation,
   useSetWereadApiKeyMutation,
@@ -13,7 +18,6 @@ import {
   useSyncRunQuery,
   useSyncRunsQuery,
 } from "../lib/queries";
-import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
@@ -22,6 +26,8 @@ import { ScrollArea } from "./ui/scroll-area";
 import { Switch } from "./ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { cn } from "../lib/utils";
+import {Link} from "react-router";
+import {formatDate} from "@/lib/format.ts";
 
 type SettingsTab = "sync" | "account" | "appearance" | "about";
 
@@ -40,6 +46,8 @@ export function SettingsDialog({
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [externalApiKeyName, setExternalApiKeyName] = useState("");
+  const [createdExternalApiKey, setCreatedExternalApiKey] = useState("");
   const [loginError, setLoginError] = useState("");
   const [settingsMessage, setSettingsMessage] = useState("");
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
@@ -49,6 +57,10 @@ export function SettingsDialog({
   const setPublicMutation = useSetPublicMutation();
   const setPasswordMutation = useSetPasswordMutation();
   const setApiKeyMutation = useSetWereadApiKeyMutation();
+  const apiKeysQuery = useApiKeysQuery(open && auth.authenticated);
+  const createApiKeyMutation = useCreateApiKeyMutation();
+  const revokeApiKeyMutation = useRevokeApiKeyMutation();
+  const clearResponseCacheMutation = useClearResponseCacheMutation();
   const runs = useMemo(() => runsQuery.data ?? [], [runsQuery.data]);
   const currentRun: SyncRun | null = runs.find((item) => item.status === "queued" || item.status === "running") ?? runs[0] ?? null;
   const effectiveRunId = selectedRunId ?? currentRun?.id ?? null;
@@ -86,6 +98,13 @@ export function SettingsDialog({
     await setApiKeyMutation.mutateAsync(apiKey);
     setApiKey("");
     setSettingsMessage("Weread API key 已保存。");
+  }
+
+  async function createExternalApiKey() {
+    setSettingsMessage("");
+    const result = await createApiKeyMutation.mutateAsync(externalApiKeyName);
+    setCreatedExternalApiKey(result.key);
+    setExternalApiKeyName("");
   }
 
   async function startSync() {
@@ -135,6 +154,9 @@ export function SettingsDialog({
                   password={password}
                   newPassword={newPassword}
                   apiKey={apiKey}
+                  externalApiKeyName={externalApiKeyName}
+                  createdExternalApiKey={createdExternalApiKey}
+                  externalApiKeys={apiKeysQuery.data ?? []}
                   loginError={loginError}
                   settingsMessage={settingsMessage}
                   passwordPending={setPasswordMutation.isPending}
@@ -142,12 +164,21 @@ export function SettingsDialog({
                   publicPending={setPublicMutation.isPending}
                   passwordError={setPasswordMutation.error}
                   apiKeyError={setApiKeyMutation.error}
+                  externalApiKeyPending={createApiKeyMutation.isPending}
+                  revokeApiKeyPending={revokeApiKeyMutation.isPending}
+                  externalApiKeysPending={apiKeysQuery.isPending}
+                  clearCachePending={clearResponseCacheMutation.isPending}
+                  externalApiKeyError={createApiKeyMutation.error ?? revokeApiKeyMutation.error}
                   onPasswordChange={setPassword}
                   onNewPasswordChange={setNewPassword}
                   onApiKeyChange={setApiKey}
+                  onExternalApiKeyNameChange={setExternalApiKeyName}
                   onLogin={() => void handleLogin()}
                   onSavePassword={() => void savePassword()}
                   onSaveApiKey={() => void saveApiKey()}
+                  onCreateExternalApiKey={() => void createExternalApiKey()}
+                  onRevokeExternalApiKey={(id) => void revokeApiKeyMutation.mutateAsync(id)}
+                  onClearCache={() => void clearResponseCacheMutation.mutateAsync(undefined, { onSuccess: () => setSettingsMessage("缓存已清空。") })}
                   onTogglePublic={() => void setPublicMutation.mutateAsync(!auth.public)}
                   onLogout={() => void auth.logout()}
                 />
@@ -178,9 +209,7 @@ export function SettingsDialog({
 
             <TabsContent value="about" className="m-0 h-full min-w-0 outline-none">
               <ScrollArea className="h-full">
-                <div className="pr-3">
-                  <AboutSettings />
-                </div>
+                <AboutSettings />
               </ScrollArea>
             </TabsContent>
           </div>
@@ -262,6 +291,8 @@ function SyncSettings({
 }) {
 
   const blockedReason = !passwordChanged ? "请先在 Account 中修改默认密码。" : !hasApiKey ? "请先在 Account 中配置 Weread API key。" : "";
+  const phaseGroups = getSyncPhaseGroups(run);
+  const activePhaseId = run?.phase ?? "";
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col shrink-0">
@@ -306,22 +337,16 @@ function SyncSettings({
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col py-4 md:py-5">
             <ScrollArea className="min-h-0 flex-1">
-              <div className="flex min-w-0 flex-col gap-3 pr-3">
-                {run?.logs && run.logs.length > 0 ? (
-                  run.logs.map((log) => (
-                    <div key={log.id} className="min-w-0 border-l px-3 py-1">
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                        <LogLevelBadge level={log.level} />
-                        <span>{formatLogTime(log.createdAt)}</span>
-                        <span>{log.phase}</span>
-                        {log.progressCurrent !== null && log.progressCurrent !== undefined ? (
-                          <span>
-                            {log.progressCurrent}/{log.progressTotal || 0}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-1 break-words text-sm leading-5">{log.message}</div>
-                    </div>
+              <div className="flex min-w-0 flex-col pr-3">
+                {phaseGroups.length > 0 ? (
+                  phaseGroups.map((phase, index) => (
+                    <SyncPhaseStepView
+                      key={phase.phaseId}
+                      phase={phase}
+                      index={index}
+                      active={phase.phaseId === activePhaseId}
+                      lastPhase={phaseGroups.length === index + 1}
+                    />
                   ))
                 ) : (
                   <div className="text-sm text-muted-foreground">暂无同步日志。</div>
@@ -345,6 +370,9 @@ function AccountSettings({
   password,
   newPassword,
   apiKey,
+  externalApiKeyName,
+  createdExternalApiKey,
+  externalApiKeys,
   loginError,
   settingsMessage,
   passwordPending,
@@ -352,12 +380,21 @@ function AccountSettings({
   publicPending,
   passwordError,
   apiKeyError,
+  externalApiKeyPending,
+  revokeApiKeyPending,
+  externalApiKeysPending,
+  clearCachePending,
+  externalApiKeyError,
   onPasswordChange,
   onNewPasswordChange,
   onApiKeyChange,
+  onExternalApiKeyNameChange,
   onLogin,
   onSavePassword,
   onSaveApiKey,
+  onCreateExternalApiKey,
+  onRevokeExternalApiKey,
+  onClearCache,
   onTogglePublic,
   onLogout,
 }: {
@@ -370,6 +407,9 @@ function AccountSettings({
   password: string;
   newPassword: string;
   apiKey: string;
+  externalApiKeyName: string;
+  createdExternalApiKey: string;
+  externalApiKeys: ExternalApiKey[];
   loginError: string;
   settingsMessage: string;
   passwordPending: boolean;
@@ -377,12 +417,21 @@ function AccountSettings({
   publicPending: boolean;
   passwordError: unknown;
   apiKeyError: unknown;
+  externalApiKeyPending: boolean;
+  revokeApiKeyPending: boolean;
+  externalApiKeysPending: boolean;
+  clearCachePending: boolean;
+  externalApiKeyError: unknown;
   onPasswordChange: (value: string) => void;
   onNewPasswordChange: (value: string) => void;
   onApiKeyChange: (value: string) => void;
+  onExternalApiKeyNameChange: (value: string) => void;
   onLogin: () => void;
   onSavePassword: () => void;
   onSaveApiKey: () => void;
+  onCreateExternalApiKey: () => void;
+  onRevokeExternalApiKey: (id: number) => void;
+  onClearCache: () => void;
   onTogglePublic: () => void;
   onLogout: () => void;
 }) {
@@ -433,7 +482,7 @@ function AccountSettings({
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:gap-5">
           <div className="shrink-0 md:w-36">
             <div className="flex items-center gap-2 text-base font-semibold">
-              修改 Weread API key
+              Weread API key
               <a
                 href="https://weread.qq.com/r/weread-skills"
                 target="_blank"
@@ -463,6 +512,62 @@ function AccountSettings({
       </section>
 
       <section className="flex items-center justify-between px-2">
+        <div className="shrink-0 text-base font-semibold md:w-36">响应缓存</div>
+        <Button className="min-w-20" variant="outline" onClick={onClearCache} disabled={clearCachePending}>
+          {clearCachePending ? "清理中..." : "清空"}
+        </Button>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:gap-5">
+          <div className="shrink-0 md:w-36">
+            <div className="text-base font-semibold">对外 API key</div>
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-3 px-2">
+            <div className="flex flex-col gap-2 md:flex-row">
+              <DarkInput
+                value={externalApiKeyName}
+                onChange={(event) => onExternalApiKeyNameChange(event.target.value)}
+                placeholder="key 名称，例如 dashboard"
+              />
+              <Button className="shrink-0 md:min-w-20" type="button" disabled={externalApiKeyPending} onClick={onCreateExternalApiKey}>
+                创建
+              </Button>
+            </div>
+            {createdExternalApiKey ? (
+              <div className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2">
+                <div className="text-xs text-muted-foreground">仅显示一次。请求时使用 Authorization: Bearer 或 x-api-key header。</div>
+                <code className="mt-1 block break-all text-sm">{createdExternalApiKey}</code>
+              </div>
+            ) : null}
+            {externalApiKeyError ? <Notice tone="error">{externalApiKeyError instanceof Error ? externalApiKeyError.message : "API key 操作失败"}</Notice> : null}
+            <div className="flex flex-col gap-2">
+              {externalApiKeysPending ? <div className="text-sm text-muted-foreground">正在读取 API key...</div> : null}
+              {!externalApiKeysPending && externalApiKeys.length === 0 ? <div className="text-sm text-muted-foreground">尚未创建 API key</div> : null}
+              {externalApiKeys.map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-3 border-t py-2">
+                  <div className="min-w-0 flex flex-col">
+                    <div className="truncate text-sm font-semibold">{item.name}</div>
+                    <div className="truncate text-xs text-muted-foreground w-full">
+                      <span>{item.prefix}...</span>
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground w-full">
+                      <span>created {formatDate(item.createdAt)}</span>
+                    </div>
+
+
+                  </div>
+                  <Button size="sm" variant="outline" disabled={revokeApiKeyPending} onClick={() => onRevokeExternalApiKey(item.id)}>
+                    撤销
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="flex items-center justify-between px-2">
         <div className="shrink-0 text-base font-semibold md:w-36">退出登录</div>
         <Button className="min-w-20" variant="outline" onClick={onLogout} disabled={logoutPending}>
           {logoutPending ? "退出中..." : "退出"}
@@ -474,7 +579,14 @@ function AccountSettings({
 
 function AboutSettings() {
   return (
-    <>About</>
+    <div className={'w-full flex items-center flex-col gap-3'}>
+      <div className={'text-6xl'}>wereto</div>
+      <Button variant={'link'} className={'text-xs'}>
+        <Link to={'https://github.com/ktkongtong/wereto'} target={'_blank'}>
+          wereto 0.1.0
+        </Link>
+      </Button>
+    </div>
   );
 }
 
@@ -489,10 +601,82 @@ function RunStatusIcon({ status }: { status: string }) {
   return <CircleDashed className="size-4 text-muted-foreground" aria-label={status} />;
 }
 
-function LogLevelBadge({ level }: { level: string }) {
-  if (level === "error") return <Badge variant="destructive">ERROR</Badge>;
-  if (level === "warn") return <Badge variant="outline" className="border-amber-400/30 text-amber-200">WARN</Badge>;
-  return <Badge variant="secondary">INFO</Badge>;
+function SyncPhaseStepView({
+  phase,
+  index,
+  active,
+  lastPhase
+}: {
+  phase: ReturnType<typeof getSyncPhaseGroups>[number];
+  index: number;
+  active: boolean;
+  lastPhase: boolean
+}) {
+  const [open, setOpen] = useState(active || phase.logs.some((log) => log.level === "error"));
+  const percent = phase.totalTask > 0 ? Math.min(100, Math.round((phase.finishedTask / phase.totalTask) * 100)) : 0;
+  const done = phase.totalTask > 0 && phase.finishedTask >= phase.totalTask && phase.failedTask === 0;
+  const failed = phase.failedTask > 0 || phase.logs.some((log) => log.level === "error");
+
+
+  return (
+    <section className="relative">
+      <div className="flex">
+        <div
+          className={cn(
+            "relative z-10 flex size-7 items-center justify-center bg-background  overflow-visible",
+            failed ? "text-destructive" : active ? "text-primary" : done ? "text-primary" : "text-muted-foreground",
+          )}
+        >
+          <div className="relative flex justify-center">
+            { !lastPhase && <div className="absolute -bottom-7 top-7 w-px bg-primary/40" /> }
+            {failed ? <CircleX className="size-4" /> : active ? <PlayCircle className="size-4" /> : done ? <CheckCircle2 className="size-4" /> : <CircleDashed className="size-4" />}
+          </div>
+
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="flex w-full min-w-0 items-center justify-between gap-3 text-left"
+        >
+          <div className={cn("min-w-0 text-sm leading-tight text-muted-foreground", active && "text-foreground", done && "text-foreground")}>
+            {index + 1}. {phase.phaseName}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {phase.totalTask > 0 ? <span className="inline-flex text-xs items-center gap-2">
+                {phase.finishedTask}/{phase.totalTask || 0}
+              </span> : null}
+
+            {open ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
+          </div>
+        </button>
+      </div>
+
+      {open ? (
+
+        <div className="pl-7 py-2">
+          {phase.logs.length > 0 ? (
+            <div className="space-y-2 font-mono text-sm">
+              {phase.logs.map((log) => (
+                <div key={log.id} className="flex flex-wrap justify-between grid-cols-[72px_1fr] gap-2">
+                  <div className={'grid min-w-0 grid-cols-[72px_1fr] gap-2'}>
+                    <span className="text-muted-foreground">{formatLogClock(log.createdAt)}</span>
+                    {log.workerId && log.workerId !== "run" ? <span className="mr-2 font-semibold">{shortWorkerId(log.workerId)}</span> : null}
+                  </div>
+
+                  <span className={cn("min-w-0 break-words", log.level === "error" && "text-destructive")}>
+
+                    {log.message}
+                        </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">暂无日志</div>
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
 function Notice({ tone, children }: { tone: "warning" | "error" | "success"; children: React.ReactNode }) {
@@ -514,6 +698,54 @@ function formatLogTime(timestamp: number) {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+  });
+}
+
+function formatLogClock(timestamp: number) {
+  if (!timestamp) return "";
+  return new Date(timestamp * 1000).toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+function shortWorkerId(workerId: string) {
+  if (workerId.startsWith("chunk:")) {
+    const parts = workerId.split(":");
+    return `W${parts.at(-1) ?? ""}`;
+  }
+  return workerId;
+}
+
+function getSyncPhaseGroups(run: SyncRun | null) {
+  if (!run) return [];
+  if (run.phaseLogs && run.phaseLogs.length > 0) return run.phaseLogs;
+
+  const logs = run.logs ?? [];
+  const phaseIds = new Set<string>([
+    ...logs.map((log) => log.phaseId ?? log.phase),
+    ...Object.keys(run.phases ?? {}),
+  ]);
+
+  return Array.from(phaseIds).map((phaseId) => {
+    const progress = run.phases?.[phaseId];
+    const phaseLogs = logs.filter((log) => (log.phaseId ?? log.phase) === phaseId);
+    const phaseName = phaseLogs[0]?.phaseName ?? phaseLogs[0]?.phase ?? phaseId;
+    return {
+      phaseId,
+      phaseName,
+      taskName: "task",
+      totalWorkers: 0,
+      runningWorkers: 0,
+      totalTask: progress?.total ?? 0,
+      runningTask: 0,
+      finishedTask: progress?.completed ?? 0,
+      failedTask: progress?.failed ?? 0,
+      skippedTask: progress?.skipped ?? 0,
+      logs: phaseLogs,
+    };
   });
 }
 

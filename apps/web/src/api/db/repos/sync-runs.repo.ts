@@ -1,12 +1,12 @@
-import { and, desc, eq, inArray, lte } from "drizzle-orm";
+import { and, desc, eq, inArray, lte, sql } from "drizzle-orm";
 
 import { nowUnix } from "../../time.ts";
 import type { DB } from "../client.ts";
 import { syncRunLogs, syncRuns, type JsonRecord } from "../schema.ts";
-import { bulkInsert } from "../utils/d1-bulk-writer.ts";
+import { bulkUpsert } from "../utils/d1-bulk-writer.ts";
 
 type SyncRunMode = "full" | "incremental";
-type SyncRunPhase =
+export type SyncRunPhase =
   | "queued"
   | "workflow"
   | "bootstrap"
@@ -29,8 +29,12 @@ type SyncRunProgress = {
 };
 
 type SyncRunLogInput = {
+  seq?: number | null;
   level: "info" | "warn" | "error";
   phase: string;
+  phaseId?: string | null;
+  phaseName?: string | null;
+  workerId?: string | null;
   message: string;
   progressCurrent?: number;
   progressTotal?: number;
@@ -83,15 +87,15 @@ export class SyncRunsRepo {
       .where(and(inArray(syncRuns.status, ["queued", "running"]), lte(syncRuns.updatedAt, staleBefore)));
   }
 
-  async attachWorkflowInstance(runId: number, workflowInstanceId: string) {
+  async markQueuePending(runId: number) {
     await this.db
       .update(syncRuns)
-      .set({ workflowInstanceId, phase: "queued", updatedAt: nowUnix() })
+      .set({ phase: "queued", updatedAt: nowUnix() })
       .where(eq(syncRuns.id, runId));
   }
 
-  async failWorkflowStart(runId: number, message: string) {
-    await this.fail(runId, { phase: "workflow", message });
+  async failQueueStart(runId: number, message: string) {
+    await this.fail(runId, { phase: "queued", message });
   }
 
   async startBootstrap(runId: number) {
@@ -132,7 +136,7 @@ export class SyncRunsRepo {
   }
 
   async finish(runId: number, result: JsonRecord, now = nowUnix()) {
-    await this.db
+    const [row] = await this.db
       .update(syncRuns)
       .set({
         status: "success",
@@ -141,12 +145,15 @@ export class SyncRunsRepo {
         updatedAt: now,
         resultJson: result,
       })
-      .where(eq(syncRuns.id, runId));
+      .where(and(eq(syncRuns.id, runId), inArray(syncRuns.status, ["queued", "running"])))
+      .returning({ id: syncRuns.id });
+
+    return row ?? null;
   }
 
   async fail(runId: number, input: { phase?: SyncRunPhase; message: string; now?: number }) {
     const now = input.now ?? nowUnix();
-    await this.db
+    const [row] = await this.db
       .update(syncRuns)
       .set({
         status: "failed",
@@ -155,7 +162,20 @@ export class SyncRunsRepo {
         updatedAt: now,
         errorMessage: input.message,
       })
-      .where(eq(syncRuns.id, runId));
+      .where(and(eq(syncRuns.id, runId), inArray(syncRuns.status, ["queued", "running"])))
+      .returning({ id: syncRuns.id });
+
+    return row ?? null;
+  }
+
+  async isActive(runId: number) {
+    const [row] = await this.db
+      .select({ id: syncRuns.id })
+      .from(syncRuns)
+      .where(and(eq(syncRuns.id, runId), inArray(syncRuns.status, ["queued", "running"])))
+      .limit(1);
+
+    return Boolean(row);
   }
 
   async failTimedOut(runId: number, staleBefore: number) {
@@ -176,23 +196,31 @@ export class SyncRunsRepo {
   }
 
   async appendLogs(runId: number, inputs: SyncRunLogInput[]) {
-    await bulkInsert(this.db, syncRunLogs, inputs.map((input) => ({
+    await bulkUpsert(this.db, syncRunLogs, [syncRunLogs.runId, syncRunLogs.seq], inputs.map((input) => ({
       runId,
+      seq: input.seq ?? null,
       level: input.level,
       phase: input.phase,
+      phaseId: input.phaseId ?? null,
+      phaseName: input.phaseName ?? null,
+      workerId: input.workerId ?? null,
       message: input.message,
       progressCurrent: input.progressCurrent,
       progressTotal: input.progressTotal,
       metaJson: input.meta ?? null,
       createdAt: input.createdAt,
-    })));
+    })), { exclude: ["runId", "seq"] });
   }
 
   async getWithLogs(runId: number) {
     const [row] = await this.db.select().from(syncRuns).where(eq(syncRuns.id, runId)).limit(1);
     if (!row) return null;
 
-    const logs = await this.db.select().from(syncRunLogs).where(eq(syncRunLogs.runId, runId)).orderBy(syncRunLogs.createdAt, syncRunLogs.id);
+    const logs = await this.db
+      .select()
+      .from(syncRunLogs)
+      .where(eq(syncRunLogs.runId, runId))
+      .orderBy(sql`coalesce(${syncRunLogs.seq}, ${syncRunLogs.id})`, syncRunLogs.id);
     return {
       ...row,
       logs,

@@ -2,11 +2,12 @@ import { Link, useLocation } from "react-router";
 import { useState } from "react";
 
 import { SettingsDialog } from "./settings-dialog";
-import {ChartNoAxesColumn, Menu, Book } from "lucide-react";
+import {ChartNoAxesColumn, Menu, Book, GithubIcon} from "lucide-react";
+import {Button} from "@/components/ui/button.tsx";
 
 const navItems = [
-  { to: "/", label: "History", glyph: <Book /> },
-  { to: "/archive", label: "Archive", glyph: <ChartNoAxesColumn /> },
+  { to: "/", label: "History", glyph: <Book className={'size-4'}/> },
+  { to: "/archive", label: "Archive", glyph: <ChartNoAxesColumn className={'size-4'}/> },
 ];
 
 export function AppShell({
@@ -51,13 +52,23 @@ export function AppShell({
           </nav>
 
           <div className="flex items-center gap-3">
+            <Button
+              variant={'link'}
+              size={'icon'}
+              title="Github"
+              className="rounded-full border border-border bg-background/40 text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+            >
+              <Link to={'https://github.com/ktkongtong/wereto'} target={'_blank'}>
+                <GithubIcon className={'size-4'}/>
+              </Link>
+            </Button>
             <button
               type="button"
               onClick={() => setActualSettingsOpen(true)}
               title="Settings"
               className="flex size-10 items-center justify-center rounded-full border border-border bg-background/40 text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
             >
-              <Menu />
+              <Menu className={'size-4'}/>
             </button>
           </div>
         </div>
@@ -87,13 +98,22 @@ export function AppShell({
           </nav>
 
           <div className="flex flex-col items-center gap-3">
+            <Button
+              variant={'link'}
+              size={'icon'}
+              title="Github"
+              className="rounded-full border border-border bg-background/40 text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+            >
+              <Link to={'https://github.com/ktkongtong/wereto'} target={'_blank'}>
+                <GithubIcon className={'size-4'}/>
+              </Link>
+            </Button>
             <button
-              type="button"
               onClick={() => setActualSettingsOpen(true)}
               title="Settings"
               className="flex size-9 items-center justify-center rounded-full border border-border bg-background/40 text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
             >
-              <Menu />
+              <Menu className={'size-4'}/>
             </button>
           </div>
         </aside>

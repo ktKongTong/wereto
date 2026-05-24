@@ -12,6 +12,35 @@ export type SessionPayload = {
   hasApiKey: boolean;
 };
 
+export type SyncRunLog = {
+  id: number;
+  runId: number;
+  seq?: number | null;
+  level: string;
+  phase: string;
+  phaseId?: string;
+  phaseName?: string | null;
+  workerId?: string | null;
+  message: string;
+  progressCurrent?: number | null;
+  progressTotal?: number | null;
+  metaJson?: string | Record<string, unknown> | null;
+  createdAt: number;
+};
+
+export type SyncPhaseStep = {
+  phaseId: string;
+  phaseName: string;
+  taskName: string;
+  totalWorkers: number;
+  runningWorkers: number;
+  totalTask: number;
+  runningTask: number;
+  finishedTask: number;
+  failedTask: number;
+  skippedTask: number;
+};
+
 export type SyncRun = {
   id: number;
   status: string;
@@ -22,17 +51,10 @@ export type SyncRun = {
   startedAt: number;
   finishedAt?: number | null;
   errorMessage?: string | null;
-  logs?: Array<{
-    id: number;
-    runId: number;
-    level: string;
-    phase: string;
-    message: string;
-    progressCurrent?: number | null;
-    progressTotal?: number | null;
-    metaJson?: string | null;
-    createdAt: number;
-  }>;
+  logs?: SyncRunLog[];
+  phases?: Record<string, { total: number; completed: number; failed: number; skipped: number }>;
+  phaseSteps?: SyncPhaseStep[];
+  phaseLogs?: Array<SyncPhaseStep & { logs: SyncRunLog[] }>;
 };
 
 export type HistoryPayload = {
@@ -52,10 +74,19 @@ export type ArchivePayload = {
   timeline: ArchiveTimelineItem[];
 };
 
+export type ExternalApiKey = {
+  id: number;
+  name: string;
+  prefix: string;
+  createdAt: number;
+  lastUsedAt: number | null;
+};
+
 export const queryKeys = {
   session: ["session"] as const,
   history: ["query", "history"] as const,
   archive: ["query", "archive"] as const,
+  apiKeys: ["settings", "apiKeys"] as const,
   syncRuns: ["sync", "runs"] as const,
   syncRun: (runId: number | null) => ["sync", "run", runId] as const,
 };
@@ -150,6 +181,61 @@ export function useSetWereadApiKeyMutation() {
   });
 }
 
+export function useClearResponseCacheMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () =>
+      fetchJson<{ ok: boolean }>("/api/settings/cache/clear", {
+        method: "POST",
+        body: "{}",
+      }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.history }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.archive }),
+      ]);
+    },
+  });
+}
+
+export function useApiKeysQuery(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.apiKeys,
+    queryFn: () => fetchJson<ExternalApiKey[]>("/api/settings/api-keys"),
+    enabled,
+  });
+}
+
+export function useCreateApiKeyMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (name: string) =>
+      fetchJson<{ key: string; item: ExternalApiKey }>("/api/settings/api-keys", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys });
+    },
+  });
+}
+
+export function useRevokeApiKeyMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: number) =>
+      fetchJson<{ ok: boolean }>(`/api/settings/api-keys/${id}`, {
+        method: "DELETE",
+      }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys });
+    },
+  });
+}
+
 export function useHistoryQuery(enabled = true) {
   return useQuery({
     queryKey: queryKeys.history,
@@ -210,7 +296,7 @@ export function useSyncRunsQuery(enabled = true, poll = false) {
 }
 
 export function useSyncRunQuery(runId: number | null, enabled = true) {
-  return useQuery({
+  const q = useQuery({
     queryKey: queryKeys.syncRun(runId),
     queryFn: () => fetchJson<SyncRun>(`/api/sync/runs/${runId}`),
     enabled: enabled && runId !== null,
@@ -221,6 +307,13 @@ export function useSyncRunQuery(runId: number | null, enabled = true) {
     refetchIntervalInBackground: false,
     staleTime: 30_000,
   });
+  const qc = useQueryClient()
+  if(q.data?.finishedAt) {
+    qc.invalidateQueries({queryKey: queryKeys.history })
+    qc.invalidateQueries({queryKey: queryKeys.apiKeys })
+    qc.invalidateQueries({queryKey: queryKeys.syncRuns })
+  }
+  return q
 }
 
 export function useStartSyncMutation() {

@@ -10,7 +10,6 @@ import {
   bookFromDetail,
   bookFromNotebook,
   bookFromShelf,
-  bookInfoFromDetail,
   bookProgressFromProgress,
   highlightsFromBookmarkPayload,
   notebookBookFromNotebook,
@@ -55,7 +54,6 @@ export async function stageShelf(
 
 export async function stageBookDetailsAndProgress(repos: RepoCtx, runId: number, items: BookDetailAndProgress[]) {
   await repos.catalog.stageBooks(runId, items.map((item) => bookFromDetail(item.wereadBookId, item.detail)));
-  await repos.catalog.stageBookInfos(runId, items.map((item) => bookInfoFromDetail(item.wereadBookId, item.detail)));
   await repos.catalog.stageBookProgresses(runId, items.map((item) => bookProgressFromProgress(item.wereadBookId, item.progress)));
 }
 

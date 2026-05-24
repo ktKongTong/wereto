@@ -1,8 +1,10 @@
-import { and, countDistinct, desc, eq, inArray, isNotNull, max, min, sum } from "drizzle-orm";
+import {and, countDistinct, desc, eq, gt, gte, inArray, isNotNull, max, min, or, sql, sum} from "drizzle-orm";
 
 import { nowUnix } from "../../time.ts";
 import type { DB } from "../client.ts";
 import {
+  books,
+  bookProgress,
   readBooks,
   readingDays,
   readingPeriodBooks,
@@ -246,5 +248,32 @@ export class ReadingRepo {
 
   async listReadBooks() {
     return this.db.select().from(readBooks).orderBy(desc(readBooks.totalReadTime), desc(readBooks.lastSeenPeriodStart));
+  }
+
+  async listRecentReadBooks(limit: number) {
+    return this.db
+      .select({
+        wereadBookId: books.wereadBookId,
+        title: books.title,
+        author: books.author,
+        cover: books.cover,
+        category: books.category,
+        progress: bookProgress.progress,
+        recordReadingTime: bookProgress.recordReadingTime,
+        finishTime: bookProgress.finishTime,
+        isStartReading: bookProgress.isStartReading,
+        lastReadAt: bookProgress.sourceUpdateTime,
+      })
+      .from(bookProgress)
+      .innerJoin(books, eq(books.id, bookProgress.bookId))
+      .where(
+        or(
+          eq(bookProgress.isStartReading, 1),
+          gt(bookProgress.recordReadingTime, 0),
+          gt(bookProgress.progress, 0),
+        )
+      )
+      .orderBy(desc(bookProgress.sourceUpdateTime), desc(bookProgress.updatedAt))
+      .limit(limit);
   }
 }

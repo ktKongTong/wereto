@@ -1,9 +1,32 @@
 import type { Context } from "hono";
 
-import { SyncRunLogger } from "./sync-logger.ts";
+import { getDB, type DbEnv } from "./db/client.ts";
+import { createRepoCtx, type RepoCtx } from "./db/repos/ctx.ts";
+import { FULL_SYNC_COMPLETED_CURSOR } from "./db/repos/sync-cursors.repo.ts";
+import { createSyncRunLogger } from "./sync-logger.ts";
+import type { SyncRunStateEnv } from "./do/sync-run-state.ts";
+import {enqueueSyncWork, type WereadSyncDispatchEnv} from "@/api/sync-queue.ts";
+
+type StartSyncEnv = DbEnv & WereadSyncDispatchEnv & SyncRunStateEnv;
+
+type StartSyncOptions = {
+  requireFullSyncCompleted?: boolean;
+};
 
 export async function startWereadSync(c: Context) {
-  const repos = c.get("repos");
+  return startWereadSyncWithRepos(c.env, c.get("repos"));
+}
+
+export async function startWereadSyncFromEnv(env: StartSyncEnv, options: StartSyncOptions = {}) {
+  const repos = createRepoCtx(getDB(env));
+  return startWereadSyncWithRepos(env, repos, options);
+}
+
+async function startWereadSyncWithRepos(env: StartSyncEnv, repos: RepoCtx, options: StartSyncOptions = {}) {
+  if (options.requireFullSyncCompleted && !await repos.cursors.get(FULL_SYNC_COMPLETED_CURSOR)) {
+    return { skipped: true, reason: "full_sync_required" };
+  }
+
   const existing = await repos.runs.findActiveWereadSyncRun();
   if (existing) {
     return { runId: existing.id, deduped: true };
@@ -11,27 +34,21 @@ export async function startWereadSync(c: Context) {
 
   const row = await repos.runs.createWereadSyncRun();
   const runId = row.id;
-  const logger = new SyncRunLogger(repos.runs, runId);
-  logger.info("workflow", "同步任务已创建，等待 Workflow 执行", {
-    progressCurrent: 0,
-    progressTotal: 0,
+  const logger = createSyncRunLogger(env, runId);
+  await logger.info("queue", "同步任务已创建，等待队列执行", {
+    meta: { runId },
   });
 
   try {
-    if (!c.env.WEREAD_SYNC_WORKFLOW) {
-      throw new Error("Missing WEREAD_SYNC_WORKFLOW binding");
+    if (!env.WEREAD_SYNC_QUEUE) {
+      throw new Error("Missing WEREAD_SYNC_QUEUE binding");
     }
 
-    const instance = await c.env.WEREAD_SYNC_WORKFLOW.create({
-      id: `wereto-sync-${runId}`,
-      params: { runId },
-    });
-
-    await repos.runs.attachWorkflowInstance(runId, instance.id);
+    await enqueueSyncWork(env, { runId });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await repos.runs.failWorkflowStart(runId, message);
-    logger.error("workflow", message);
+    await repos.runs.failQueueStart(runId, message);
+    await logger.error("queue", message);
     await logger.flush();
     throw error;
   }

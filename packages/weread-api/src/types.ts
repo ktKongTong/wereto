@@ -296,6 +296,20 @@ export interface ReadDataDetailRequest extends WereadGatewayRequest<"/readdata/d
   baseTime?: number;
 }
 
+
+export interface WeeklyReadDataDetailRequest extends WereadGatewayRequest<"/readdata/detail"> {
+  week?: number;
+}
+
+export interface AnnuallyReadDataDetailRequest extends WereadGatewayRequest<"/readdata/detail"> {
+  year?: number;
+}
+
+export interface MonthlyReadDataDetailRequest extends WereadGatewayRequest<"/readdata/detail"> {
+  year?: number;
+  month?: number;
+}
+
 export interface ReadDataBucketMap {
   [timestamp: string]: number;
 }

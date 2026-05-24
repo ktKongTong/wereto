@@ -28,6 +28,8 @@ import {
   type UserNotebooksResponse,
   type WereadGatewayRequest,
   type WereadGatewayResponse,
+  type MonthlyReadDataDetailRequest,
+  type AnnuallyReadDataDetailRequest,
 } from "./types.ts";
 
 const DEFAULT_BASE_URL = "https://i.weread.qq.com/api/agent/gateway";
@@ -159,6 +161,26 @@ export class WereadClient {
     return this.request<ReadDataDetailResponse, ReadDataDetailRequest>({
       api_name: "/readdata/detail",
       ...payload,
+    });
+  }
+
+  getAnnuallyReadData({ year, ...rest }: Omit<AnnuallyReadDataDetailRequest, "api_name" | "skill_version"> = {}): Promise<ReadDataDetailResponse> {
+    const y = new Date().getUTCFullYear()
+    return this.request<ReadDataDetailResponse, ReadDataDetailRequest>({
+      api_name: "/readdata/detail",
+      baseTime: Math.floor(Date.UTC(year || y, 0, 1) / 1000),
+      mode: 'annually',
+      ...rest,
+    });
+  }
+
+  getMonthlyReadData({ year, month, ...rest }: Omit<MonthlyReadDataDetailRequest, "api_name" | "skill_version"> = {}): Promise<ReadDataDetailResponse> {
+    const y = new Date().getUTCFullYear()
+    return this.request<ReadDataDetailResponse, ReadDataDetailRequest>({
+      api_name: "/readdata/detail",
+      baseTime: Math.floor(Date.UTC(year || y, (month??0) + 1, 1) / 1000),
+      mode: 'monthly',
+      ...rest,
     });
   }
 

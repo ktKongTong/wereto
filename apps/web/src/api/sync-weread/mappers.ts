@@ -89,16 +89,10 @@ export function bookFromDetail(wereadBookId: string, detail: Awaited<ReturnType<
   return {
     ...bookSnapshot(wereadBookId, detail, detail),
     ...pick(detail, ["intro", "publisher", "isbn", "wordCount"]),
-    rating: detail.newRating,
-    ratingCount: detail.newRatingCount,
-  };
-}
-
-export function bookInfoFromDetail(wereadBookId: string, detail: Awaited<ReturnType<WereadClient["getBookInfo"]>>) {
-  return {
-    ...bookFromDetail(wereadBookId, detail),
     translator: detail.translator,
     publishTime: detail.publishTime,
+    rating: detail.newRating,
+    ratingCount: detail.newRatingCount,
     ratingDetailJson: detail.newRatingDetail ?? null,
   };
 }

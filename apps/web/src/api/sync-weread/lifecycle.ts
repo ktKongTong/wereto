@@ -6,16 +6,19 @@ import { nowUnix } from "./utils.ts";
 
 export async function bootstrapRun(repos: RepoCtx, runId: number, logger: SyncRunLogger) {
   await repos.runs.startBootstrap(runId);
-  logger.info("bootstrap", "同步任务开始");
+  await logger.phaseStarted("bootstrap", { phaseName: "初始化", taskName: "task", totalTask: 1 });
+  await logger.workerStarted("bootstrap", "bootstrap", 1);
   await repos.catalog.clearSnapshots(runId);
   await repos.notebook.clearSnapshots(runId);
   await repos.reading.clearSnapshots(runId);
   await repos.cursors.clearSnapshots(runId);
+  await logger.workerDone("bootstrap", "bootstrap", 1, "同步任务初始化完成");
 }
 
 export async function finalizeRun(repos: RepoCtx, runId: number, logger: SyncRunLogger, result: JsonRecord) {
   await repos.runs.setPhase(runId, "commit", { current: 0, total: 1 });
-  logger.info("commit", "开始批量提交 snapshot");
+  await logger.phaseStarted("commit", { phaseName: "提交", taskName: "commit", totalTask: 1 });
+  await logger.workerStarted("commit", "commit", 1);
   if (result.mode !== "incremental") {
     await repos.cursors.stageSyncCursor(runId, {
       key: FULL_SYNC_COMPLETED_CURSOR,
@@ -23,9 +26,10 @@ export async function finalizeRun(repos: RepoCtx, runId: number, logger: SyncRun
     });
   }
   await commitStagedRun(repos, runId);
+  await logger.workerDone("commit", "commit", 1, "snapshot 批量提交完成");
   await repos.runs.finish(runId, result);
-  await clearCommittedSnapshots(repos, runId);
-  logger.info("finalize", result.mode === "incremental" ? "增量同步任务完成" : "同步任务完成", { meta: result });
+  // await clearCommittedSnapshots(repos, runId);
+  await logger.runFinished(result.mode === "incremental" ? "增量同步任务完成" : "同步任务完成", { meta: result });
 }
 
 async function commitStagedRun(repos: RepoCtx, runId: number) {

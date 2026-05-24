@@ -52,6 +52,16 @@ export class NotebookRepo {
     await bulkUpsert(this.db, syncSnapshotReviews, [syncSnapshotReviews.runId, syncSnapshotReviews.wereadReviewId], rows.map((row) => ({ runId, createdAt, ...row })));
   }
 
+  async listStagedNotebookBookIds(runId: number) {
+    const rows = await this.db
+      .select({ wereadBookId: syncSnapshotNotebookBooks.wereadBookId })
+      .from(syncSnapshotNotebookBooks)
+      .where(eq(syncSnapshotNotebookBooks.runId, runId))
+      .orderBy(desc(syncSnapshotNotebookBooks.sort));
+
+    return rows.map((row) => row.wereadBookId);
+  }
+
   async commitNotebookBooks(rows: Array<typeof syncSnapshotNotebookBooks.$inferSelect>, bookIdMap: Map<string, number>, now: number) {
     await this.upsertNotebookBooks(rows.flatMap((row) => {
       const bookId = bookIdMap.get(row.wereadBookId);

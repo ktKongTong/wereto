@@ -17,7 +17,7 @@ CREATE TABLE `app_config` (
 	`updated_at` integer NOT NULL
 );
 INSERT INTO `app_config` (`key`, `value`, `updated_at`)
-VALUES ('auth.password', 'weread', 0);
+VALUES ('auth.password', 'wereto', 0);
 INSERT INTO `app_config` (`key`, `value`, `updated_at`)
 VALUES ('auth.passwordChanged', 'false', 0);
 INSERT INTO `app_config` (`key`, `value`, `updated_at`)
